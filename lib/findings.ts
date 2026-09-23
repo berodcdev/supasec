@@ -3,7 +3,11 @@
 // vulnerable" layer that sits on top of ScanRecord.
 
 import type { ScanRecord } from "@/lib/scan-history"
-import { flagSensitiveColumns, flagSensitiveValues } from "@/lib/sensitive"
+import {
+  flagSensitiveColumns,
+  flagSensitiveValues,
+  describeJwtsInRow,
+} from "@/lib/sensitive"
 
 export type FindingSeverity = "critical" | "high" | "medium" | "low" | "info"
 
@@ -43,10 +47,11 @@ export function deriveFindings(record: ScanRecord): Finding[] {
   for (const r of record.db) {
     if (r.select === "allowed") {
       const sensitive = flagSensitiveColumns(r.columns)
-      const valSecrets =
+      const isRow =
         r.sample && typeof r.sample === "object" && !Array.isArray(r.sample)
-          ? flagSensitiveValues(r.sample as Record<string, unknown>).kinds
-          : []
+      const sampleRow = isRow ? (r.sample as Record<string, unknown>) : null
+      const valSecrets = sampleRow ? flagSensitiveValues(sampleRow).kinds : []
+      const jwtDescs = sampleRow ? describeJwtsInRow(sampleRow) : []
       const rowText =
         r.rowCount != null ? `${r.rowCount.toLocaleString()} row(s)` : "readable rows"
       const colText = r.colCount != null ? `${r.colCount} column(s)` : "unknown columns"
@@ -54,6 +59,8 @@ export function deriveFindings(record: ScanRecord): Finding[] {
         sensitive.length > 0 ? ` — includes ${sensitive.join(", ")}` : ""
       const valNote =
         valSecrets.length > 0 ? ` — secret values: ${valSecrets.join(", ")}` : ""
+      const jwtNote =
+        jwtDescs.length > 0 ? ` — JWT(s): ${jwtDescs.join(" | ")}` : ""
       findings.push({
         id: `db-select-${r.name}`,
         // PII, secret values, or an anon POV makes this critical; otherwise high.
@@ -62,7 +69,7 @@ export function deriveFindings(record: ScanRecord): Finding[] {
         category: "database",
         target: r.name,
         title: `Table "${r.name}" exposes data`,
-        evidence: `${rowText}, ${colText}${sensNote}${valNote} — ${povNote}`,
+        evidence: `${rowText}, ${colText}${sensNote}${valNote}${jwtNote} — ${povNote}`,
         remediation:
           "Enable Row Level Security on the table and add a policy that scopes rows to the authenticated user (e.g. auth.uid() = user_id).",
       })

@@ -16,6 +16,7 @@ import {
 import type { RealtimeChannel } from "@supabase/supabase-js"
 
 import { useSupabase } from "@/lib/supabase-context"
+import { scanJsonForSecrets } from "@/lib/sensitive"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -748,7 +749,16 @@ export function Realtime() {
 
   const handleNewEvent = useCallback((event: RealtimeEvent) => {
     setEvents((prev) => [...prev, event])
-  }, [])
+    const scan = scanJsonForSecrets(event.payload)
+    if (scan.kinds.length > 0 || scan.jwts.length > 0) {
+      const parts: string[] = []
+      if (scan.kinds.length > 0) parts.push(`secrets: ${scan.kinds.join(", ")}`)
+      if (scan.jwts.length > 0) parts.push(`JWT(s): ${scan.jwts.join(" | ")}`)
+      addLog("warning", `🔎 CLUE — realtime ${event.type} — ${parts.join("; ")}`, {
+        type: event.type,
+      })
+    }
+  }, [addLog])
 
   const handleClearEvents = useCallback(() => {
     setEvents([])

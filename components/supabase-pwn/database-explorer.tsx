@@ -24,7 +24,7 @@ import { JsonViewer } from "@/components/supabase-pwn/shared/json-viewer"
 import { StatusBadge, type Severity } from "@/components/supabase-pwn/shared/status-badge"
 import { EmptyState } from "@/components/supabase-pwn/shared/empty-state"
 import { ReticlePanel } from "@/components/supabase-pwn/shared/reticle-panel"
-import { isSensitiveColumn, sensitiveTableHint } from "@/lib/sensitive"
+import { isSensitiveColumn, sensitiveTableHint, scanJsonForSecrets } from "@/lib/sensitive"
 
 
 // ---------------------------------------------------------------------------
@@ -831,6 +831,13 @@ function RpcTab() {
       } else {
         addLog("success", `RPC "${fnName}" succeeded`, data)
         setResult(JSON.stringify(data, null, 2))
+        const scan = scanJsonForSecrets(data)
+        if (scan.kinds.length > 0 || scan.jwts.length > 0) {
+          const parts: string[] = []
+          if (scan.kinds.length > 0) parts.push(`secrets: ${scan.kinds.join(", ")}`)
+          if (scan.jwts.length > 0) parts.push(`JWT(s): ${scan.jwts.join(" | ")}`)
+          addLog("warning", `🔎 CLUE — RPC "${fnName}" response — ${parts.join("; ")}`, { fn: fnName })
+        }
       }
     } catch (err) {
       const msg = err instanceof Error ? err.message : "Unknown error"
