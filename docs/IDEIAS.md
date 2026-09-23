@@ -3,6 +3,11 @@
 Gerado pela skill `sugerir`. Status: proposta · aceita · descartada · feita.
 Ideia descartada não volta a ser sugerida; o motivo fica registrado.
 
+## 2026-09-23 · a partir de "Instalador local de um comando"
+- [ ] **Imagem publicada no GHCR (GitHub Action)** (M) — hoje o install builda o source localmente (~1-2min + precisa do repo); uma Action que builda e publica `ghcr.io/berodcdev/supabase-pwn:latest` deixaria o install só `docker run` da imagem, sem clonar/buildar — é o que torna a ferramenta distribuível de verdade · `.github/workflows/`, `install.sh` · _proposta_
+- [ ] **`install.sh --uninstall`** (P) — ferramenta boa também sai limpo: `compose down` + remove imagem/volume; hoje só tem instalar/atualizar · `install.sh` · _proposta_
+- [ ] **One-liner `curl | bash`** (P) — o ápice do "um comando": `curl -fsSL .../install.sh | bash` que clona+roda; depende de tornar o repo público (ou servir o script como release asset) · `install.sh`, `README.md` · _proposta_
+
 ## 2026-09-23 · a partir de "Deploy na VPS srv1 (Traefik + Authelia)"
 - [ ] **Auto-deploy no push** (M) — deploy key + repo já configurados; um `git pull && docker compose -f docker-compose.srv1.yml up -d --build` via webhook/cron fecharia o ciclo · `srv1` · _proposta_
 - [ ] **IPAllowList no Traefik antes do Authelia** (P) — encadear um middleware de IP allowlist antes do `authelia@docker` corta scan automatizado antes do login · `docker-compose.srv1.yml` · _proposta_
