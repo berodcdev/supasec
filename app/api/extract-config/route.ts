@@ -124,8 +124,20 @@ function extractScriptUrls(html: string, baseUrl: string): {
   external: string[]
   inline: string[]
 } {
-  const external: string[] = []
+  const external = new Set<string>()
   const inline: string[] = []
+
+  const addUrl = (raw: string | undefined | null) => {
+    if (!raw) return
+    try {
+      const u = new URL(raw, baseUrl)
+      if (u.protocol === "http:" || u.protocol === "https:") {
+        external.add(u.toString())
+      }
+    } catch { /* ignore bad URL */ }
+  }
+
+  // 1) <script src> and inline <script> bodies
   const tagRe = /<script\b([^>]*)>([\s\S]*?)<\/script>/gi
   let m: RegExpExecArray | null
   while ((m = tagRe.exec(html)) !== null) {
@@ -133,16 +145,37 @@ function extractScriptUrls(html: string, baseUrl: string): {
     const inner = m[2]
     const srcMatch = /\bsrc\s*=\s*(?:"([^"]+)"|'([^']+)'|([^\s>]+))/i.exec(attrs)
     if (srcMatch) {
-      const raw = srcMatch[1] ?? srcMatch[2] ?? srcMatch[3]
-      if (!raw) continue
-      try {
-        external.push(new URL(raw, baseUrl).toString())
-      } catch { /* ignore bad URL */ }
+      addUrl(srcMatch[1] ?? srcMatch[2] ?? srcMatch[3])
     } else if (inner && inner.trim().length > 0) {
       inline.push(inner)
     }
   }
-  return { external, inline }
+
+  // 2) <link rel="modulepreload|preload|prefetch" ...> — how Vite (and some
+  //    Next.js) reference the dependency chunks that hold the Supabase config.
+  const linkRe = /<link\b([^>]*)>/gi
+  while ((m = linkRe.exec(html)) !== null) {
+    const attrs = m[1]
+    const relM = /\brel\s*=\s*(?:"([^"]+)"|'([^']+)'|([^\s>]+))/i.exec(attrs)
+    const rel = (relM?.[1] ?? relM?.[2] ?? relM?.[3] ?? "").toLowerCase()
+    if (!/(modulepreload|preload|prefetch)/.test(rel)) continue
+    const hrefM = /\bhref\s*=\s*(?:"([^"]+)"|'([^']+)'|([^\s>]+))/i.exec(attrs)
+    const raw = hrefM?.[1] ?? hrefM?.[2] ?? hrefM?.[3]
+    if (!raw) continue
+    const asM = /\bas\s*=\s*(?:"([^"]+)"|'([^']+)'|([^\s>]+))/i.exec(attrs)
+    const as = (asM?.[1] ?? asM?.[2] ?? asM?.[3] ?? "").toLowerCase()
+    const looksJs = /\.m?js(?:\?|$)/i.test(raw)
+    if (rel.includes("modulepreload") || as === "script" || looksJs) addUrl(raw)
+  }
+
+  // 3) Generic sweep: any literal *.js / *.mjs URL elsewhere in the HTML
+  //    (asset manifests, RSC payloads, chunk lists embedded as strings).
+  const jsUrlRe = /["'`]([^"'`\s<>]+?\.m?js(?:\?[^"'`\s<>]*)?)["'`]/gi
+  while ((m = jsUrlRe.exec(html)) !== null) {
+    addUrl(m[1])
+  }
+
+  return { external: [...external], inline }
 }
 
 function extractSameOriginLinks(html: string, baseUrl: string): string[] {

@@ -1,5 +1,7 @@
 "use client"
 
+import { uuid } from "@/lib/utils"
+
 import {
   createContext,
   useCallback,
@@ -7,6 +9,7 @@ import {
   useMemo,
   useReducer,
   useRef,
+  useState,
   type ReactNode,
 } from "react"
 import {
@@ -137,6 +140,16 @@ type SupabaseContextValue = SupabaseState & {
   discoverTables: (customNames?: string[]) => Promise<void>
   importSchemaDump: (sql: string) => void
   mergeHints: (hints: { tables?: string[]; functions?: string[] }) => void
+  /** Increments each time something requests an AutoPwn run (auto-scan / "Run scan"). */
+  scanSignal: number
+  /** Ask the AutoPwn tab to start a scan (also switches to it). */
+  triggerScan: () => void
+  /** The active main tab — controlled so triggerScan can jump to AutoPwn. */
+  activeTab: string
+  setActiveTab: (tab: string) => void
+  /** Cross-tab focus request (e.g. a finding asking to open its table/bucket). */
+  focusTarget: { kind: string; name: string } | null
+  focusOn: (kind: string, name: string) => void
 }
 
 // ---------------------------------------------------------------------------
@@ -576,11 +589,30 @@ export function SupabaseProvider({ children }: { children: ReactNode }) {
   const [state, dispatch] = useReducer(reducer, initialState)
   const authUnsubscribeRef = useRef<(() => void) | null>(null)
 
+  // -- Scan signal (lets other components ask AutoPwn to run) --------------
+  const [scanSignal, setScanSignal] = useState(0)
+  const [activeTab, setActiveTab] = useState("database")
+  const triggerScan = useCallback(() => {
+    setActiveTab("autopwn")
+    setScanSignal((n) => n + 1)
+  }, [])
+
+  // -- Cross-tab focus (a finding jumping to its table/bucket) -------------
+  const [focusTarget, setFocusTarget] = useState<
+    { kind: string; name: string } | null
+  >(null)
+  const focusOn = useCallback((kind: string, name: string) => {
+    // New object each call so consumers re-trigger even for the same target.
+    setFocusTarget({ kind, name })
+    if (kind === "database") setActiveTab("database")
+    else if (kind === "storage") setActiveTab("storage")
+  }, [])
+
   // -- addLog -------------------------------------------------------------
   const addLog = useCallback(
     (type: LogEntry["type"], message: string, data?: unknown) => {
       const entry: LogEntry = {
-        id: crypto.randomUUID(),
+        id: uuid(),
         timestamp: new Date(),
         type,
         message,
@@ -628,7 +660,7 @@ export function SupabaseProvider({ children }: { children: ReactNode }) {
             dispatch({
               type: "ADD_LOG",
               payload: {
-                id: crypto.randomUUID(),
+                id: uuid(),
                 timestamp: new Date(),
                 type: "warning",
                 message: `Schema discovery blocked: ${hint}. Use Bruteforce to discover tables.`,
@@ -641,7 +673,7 @@ export function SupabaseProvider({ children }: { children: ReactNode }) {
           dispatch({
             type: "ADD_LOG",
             payload: {
-              id: crypto.randomUUID(),
+              id: uuid(),
               timestamp: new Date(),
               type: "warning",
               message: "Schema discovery request failed. Use Bruteforce to discover tables.",
@@ -668,7 +700,7 @@ export function SupabaseProvider({ children }: { children: ReactNode }) {
           })
 
           const logEntry: LogEntry = {
-            id: crypto.randomUUID(),
+            id: uuid(),
             timestamp: new Date(),
             type: "info",
             message: `Auth event: ${event}`,
@@ -681,7 +713,7 @@ export function SupabaseProvider({ children }: { children: ReactNode }) {
 
         // Log success
         const successLog: LogEntry = {
-          id: crypto.randomUUID(),
+          id: uuid(),
           timestamp: new Date(),
           type: "success",
           message: schemaBlocked
@@ -692,7 +724,7 @@ export function SupabaseProvider({ children }: { children: ReactNode }) {
         dispatch({ type: "ADD_LOG", payload: successLog })
       } catch (err) {
         const errorLog: LogEntry = {
-          id: crypto.randomUUID(),
+          id: uuid(),
           timestamp: new Date(),
           type: "error",
           message:
@@ -787,14 +819,16 @@ export function SupabaseProvider({ children }: { children: ReactNode }) {
           discovered.push(r.table)
           existing.add(r.table)
           if (Array.isArray(r.data) && r.data.length > 0) {
-            columns[r.table] = Object.keys(r.data[0]).map((name) => ({
+            const rows = r.data as Record<string, unknown>[]
+            const first = rows[0]
+            columns[r.table] = Object.keys(first).map((name) => ({
               name,
-              type: inferColumnType(r.data[0][name]),
+              type: inferColumnType(first[name]),
               required: false,
             }))
             addLog(
               "success",
-              `Found: ${r.table} (${r.data.length} row visible, ${Object.keys(r.data[0]).length} cols)`,
+              `Found: ${r.table} (${rows.length} row visible, ${Object.keys(first).length} cols)`,
             )
           } else {
             addLog("success", `Found: ${r.table} (empty or RLS blocked)`)
@@ -897,8 +931,14 @@ export function SupabaseProvider({ children }: { children: ReactNode }) {
       discoverTables,
       importSchemaDump,
       mergeHints,
+      scanSignal,
+      triggerScan,
+      activeTab,
+      setActiveTab,
+      focusTarget,
+      focusOn,
     }),
-    [state, initialize, addLog, clearLogs, signOut, disconnect, discoverTables, importSchemaDump, mergeHints],
+    [state, initialize, addLog, clearLogs, signOut, disconnect, discoverTables, importSchemaDump, mergeHints, scanSignal, triggerScan, activeTab, focusTarget, focusOn],
   )
 
   return (

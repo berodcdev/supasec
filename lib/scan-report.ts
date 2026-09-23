@@ -1,7 +1,16 @@
 import type { ScanRecord } from "./scan-history"
+import { deriveFindings, summarizeFindings, type FindingSeverity } from "./findings"
 
 function escapeMd(s: string): string {
   return s.replace(/\|/g, "\\|").replace(/\n/g, " ")
+}
+
+const SEVERITY_ICON: Record<FindingSeverity, string> = {
+  critical: "🔴",
+  high: "🟠",
+  medium: "🟡",
+  low: "🔵",
+  info: "⚪",
 }
 
 export function formatMarkdownReport(record: ScanRecord): string {
@@ -33,6 +42,27 @@ export function formatMarkdownReport(record: ScanRecord): string {
   if (record.auth.length > 0) lines.push(`- ${authOpen}/${record.auth.length} auth features open`)
   if (record.functions.length > 0) lines.push(`- ${fnsFound}/${record.functions.length} edge functions discovered`)
   lines.push("")
+
+  // Findings (prioritized) ----------------------------------------------
+  const findings = deriveFindings(record)
+  if (findings.length > 0) {
+    const c = summarizeFindings(findings)
+    lines.push(`## Findings`)
+    lines.push("")
+    lines.push(
+      `${c.critical} critical · ${c.high} high · ${c.medium} medium · ${c.low} low · ${c.info} info`,
+    )
+    lines.push("")
+    for (const f of findings) {
+      lines.push(
+        `### ${SEVERITY_ICON[f.severity]} [${f.severity.toUpperCase()}] ${f.title}`,
+      )
+      lines.push("")
+      lines.push(`- **Evidence:** ${f.evidence}`)
+      lines.push(`- **Remediation:** ${f.remediation}`)
+      lines.push("")
+    }
+  }
 
   // Database -------------------------------------------------------------
   if (record.db.length > 0) {

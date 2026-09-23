@@ -14,6 +14,7 @@ import { EdgeFunctions } from "@/components/supabase-pwn/edge-functions"
 import { Realtime } from "@/components/supabase-pwn/realtime"
 import { AutoPwn } from "@/components/supabase-pwn/autopwn"
 import { OutputLog } from "@/components/supabase-pwn/output-log"
+import { EmptyState } from "@/components/supabase-pwn/shared/empty-state"
 import {
   Tabs,
   TabsContent,
@@ -30,10 +31,10 @@ import {
 } from "lucide-react"
 
 export default function Home() {
-  const { initialized } = useSupabase()
+  const { initialized, activeTab, setActiveTab } = useSupabase()
 
   return (
-    <div className="flex h-screen flex-col bg-background text-foreground">
+    <div className="flex h-screen flex-col bg-background bg-graticule text-foreground">
       <Header />
       <InitForm />
       <ResizablePanelGroup orientation="vertical" className="flex-1 min-h-0">
@@ -42,10 +43,11 @@ export default function Home() {
             <ResizablePanel id="tabs-panel" defaultSize="70%" minSize="40%">
               {initialized ? (
                 <Tabs
-                  defaultValue="database"
+                  value={activeTab}
+                  onValueChange={setActiveTab}
                   className="flex h-full flex-col overflow-hidden"
                 >
-                  <TabsList className="mx-4 mt-2 w-fit shrink-0">
+                  <TabsList variant="line" className="mx-4 mt-2 w-fit shrink-0">
                     <TabsTrigger value="database">
                       <Database className="mr-1.5 h-3.5 w-3.5" />
                       Database
@@ -99,9 +101,11 @@ export default function Home() {
                   </TabsContent>
                 </Tabs>
               ) : (
-                <div className="flex h-full flex-col items-center justify-center gap-3 text-muted-foreground">
-                  <ShieldAlert className="h-8 w-8 opacity-30" />
-                  <p className="text-sm">Initialize a Supabase project to get started</p>
+                <div className="flex h-full items-center justify-center">
+                  <EmptyState
+                    icon={ShieldAlert}
+                    title="Initialize a Supabase project to get started"
+                  />
                 </div>
               )}
             </ResizablePanel>
@@ -110,8 +114,8 @@ export default function Home() {
               {initialized ? (
                 <AuthPanel />
               ) : (
-                <div className="flex h-full flex-col items-center justify-center gap-2 text-muted-foreground">
-                  <p className="text-xs">Auth panel</p>
+                <div className="flex h-full items-center justify-center">
+                  <EmptyState title="Auth panel" />
                 </div>
               )}
             </ResizablePanel>

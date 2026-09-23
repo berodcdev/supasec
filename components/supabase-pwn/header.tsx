@@ -8,11 +8,10 @@ export function Header() {
 
       <div className="flex items-center justify-between px-4 py-2.5 border-b border-border">
         <div className="flex items-center gap-2.5">
-          <div className="relative">
-            <Shield className="h-5 w-5 text-primary" />
-            <div className="absolute inset-0 blur-md bg-primary/30 -z-10" />
+          <div className="flex size-6 items-center justify-center rounded-sm border border-primary/40">
+            <Shield className="h-3.5 w-3.5 text-primary" />
           </div>
-          <h1 className="text-sm font-semibold tracking-widest uppercase text-foreground">
+          <h1 className="font-mono text-sm font-semibold uppercase tracking-widest text-foreground">
             supabase-pwn
           </h1>
           <span className="text-[10px] font-mono text-muted-foreground border border-border rounded px-1.5 py-0.5 leading-none">

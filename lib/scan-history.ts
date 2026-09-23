@@ -11,6 +11,14 @@ export type StoredDbResult = {
   update?: WriteStatus
   delete?: WriteStatus
   details?: string
+  /** Exact row count when the table exposed data (null if it couldn't be read). */
+  rowCount?: number | null
+  /** Number of columns in the exposed row. */
+  colCount?: number
+  /** Column names harvested from the exposed row. */
+  columns?: string[]
+  /** First exposed row — what actually leaked. */
+  sample?: unknown
 }
 
 export type StoredStorageResult = {
@@ -72,6 +80,21 @@ export function loadLastScan(projectUrl: string): ScanRecord | null {
     return parsed
   } catch {
     return null
+  }
+}
+
+/** All persisted scans for a project, newest first (up to HISTORY_LIMIT). */
+export function loadScanHistory(projectUrl: string): ScanRecord[] {
+  if (typeof window === "undefined") return []
+  try {
+    const raw = localStorage.getItem(projectKey(projectUrl))
+    if (!raw) return []
+    const parsed = JSON.parse(raw)
+    if (Array.isArray(parsed)) return parsed as ScanRecord[]
+    if (parsed && typeof parsed === "object") return [parsed as ScanRecord]
+    return []
+  } catch {
+    return []
   }
 }
 

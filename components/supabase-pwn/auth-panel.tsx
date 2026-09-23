@@ -15,8 +15,9 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
-import { Badge } from "@/components/ui/badge"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { JsonViewer } from "@/components/supabase-pwn/shared/json-viewer"
+import { StatusBadge } from "@/components/supabase-pwn/shared/status-badge"
 import {
   Collapsible,
   CollapsibleContent,
@@ -511,9 +512,7 @@ function BearerTokenTab() {
       {preview && (
         <div className="space-y-1">
           <Label className="text-xs text-muted-foreground">Token Preview</Label>
-          <pre className="text-xs font-mono bg-muted p-2 rounded overflow-x-auto max-h-32 overflow-y-auto">
-            {JSON.stringify(preview, null, 2)}
-          </pre>
+          <JsonViewer data={preview} className="max-h-32" padding="p-2" copyable />
         </div>
       )}
       <Button
@@ -575,9 +574,9 @@ function AuthenticatedUserInfo() {
             <User className="h-4 w-4 text-muted-foreground" />
             <CardTitle className="text-sm">Authenticated User</CardTitle>
           </div>
-          <Badge className="bg-primary text-primary-foreground hover:bg-primary">
+          <StatusBadge severity="info" dot={false}>
             {String(role)}
-          </Badge>
+          </StatusBadge>
         </div>
       </CardHeader>
       <CardContent className="space-y-3">
@@ -631,9 +630,7 @@ function AuthenticatedUserInfo() {
                 <Label className="text-xs text-muted-foreground">
                   app_metadata
                 </Label>
-                <pre className="text-xs font-mono bg-muted p-2 rounded overflow-x-auto max-h-40 overflow-y-auto">
-                  {JSON.stringify(user.app_metadata, null, 2)}
-                </pre>
+                <JsonViewer data={user.app_metadata} className="max-h-40" padding="p-2" copyable />
               </div>
 
               {/* user_metadata */}
@@ -641,9 +638,7 @@ function AuthenticatedUserInfo() {
                 <Label className="text-xs text-muted-foreground">
                   user_metadata
                 </Label>
-                <pre className="text-xs font-mono bg-muted p-2 rounded overflow-x-auto max-h-40 overflow-y-auto">
-                  {JSON.stringify(user.user_metadata, null, 2)}
-                </pre>
+                <JsonViewer data={user.user_metadata} className="max-h-40" padding="p-2" copyable />
               </div>
 
               {/* Decoded JWT payload */}
@@ -652,9 +647,7 @@ function AuthenticatedUserInfo() {
                   <Label className="text-xs text-muted-foreground">
                     JWT Payload
                   </Label>
-                  <pre className="text-xs font-mono bg-muted p-2 rounded overflow-x-auto max-h-48 overflow-y-auto">
-                    {JSON.stringify(jwtPayload, null, 2)}
-                  </pre>
+                  <JsonViewer data={jwtPayload} className="max-h-48" padding="p-2" copyable />
                 </div>
               )}
             </div>

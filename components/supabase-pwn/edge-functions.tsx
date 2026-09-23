@@ -1,8 +1,9 @@
 "use client"
 
+import { uuid } from "@/lib/utils"
+
 import { useCallback, useState } from "react"
 import { Plus, X, Play, Zap } from "lucide-react"
-import { Highlight, themes } from "prism-react-renderer"
 
 import { useSupabase } from "@/lib/supabase-context"
 import { Button } from "@/components/ui/button"
@@ -10,6 +11,9 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { Card, CardContent } from "@/components/ui/card"
+import { JsonViewer } from "@/components/supabase-pwn/shared/json-viewer"
+import { SectionHeader } from "@/components/supabase-pwn/shared/section-header"
+import { EmptyState } from "@/components/supabase-pwn/shared/empty-state"
 
 // ---------------------------------------------------------------------------
 // Types
@@ -27,31 +31,10 @@ type HeaderRow = {
 
 function createHeaderRow(): HeaderRow {
   return {
-    id: crypto.randomUUID(),
+    id: uuid(),
     key: "",
     value: "",
   }
-}
-
-function JsonResult({ json }: { json: string }) {
-  return (
-    <Highlight theme={themes.vsDark} code={json} language="json">
-      {({ style, tokens, getLineProps, getTokenProps }) => (
-        <pre
-          style={style}
-          className="text-xs p-3 rounded overflow-x-auto max-h-96"
-        >
-          {tokens.map((line, i) => (
-            <div key={i} {...getLineProps({ line })}>
-              {line.map((token, key) => (
-                <span key={key} {...getTokenProps({ token })} />
-              ))}
-            </div>
-          ))}
-        </pre>
-      )}
-    </Highlight>
-  )
 }
 
 // ---------------------------------------------------------------------------
@@ -165,8 +148,8 @@ export function EdgeFunctions() {
   if (!client) {
     return (
       <Card>
-        <CardContent className="py-8 text-center text-sm text-muted-foreground">
-          Connect to a Supabase project first.
+        <CardContent>
+          <EmptyState title="Connect to a Supabase project first." />
         </CardContent>
       </Card>
     )
@@ -175,10 +158,7 @@ export function EdgeFunctions() {
   return (
     <div className="space-y-4">
       {/* Header */}
-      <div className="flex items-center gap-2 text-sm text-muted-foreground">
-        <Zap className="size-4" />
-        <span>Invoke Supabase Edge Functions</span>
-      </div>
+      <SectionHeader icon={Zap} eyebrow="EDGE" title="Invoke Supabase Edge Functions" />
 
       {/* Function Name */}
       <Card>
@@ -263,7 +243,7 @@ export function EdgeFunctions() {
             <Label className="text-xs text-muted-foreground mb-2 block">
               Response
             </Label>
-            <JsonResult json={result} />
+            <JsonViewer json={result} className="max-h-96" copyable />
           </CardContent>
         </Card>
       )}

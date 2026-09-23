@@ -1,8 +1,9 @@
 "use client"
 
+import { uuid } from "@/lib/utils"
+
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { Plus, X, Play, Trash2, Wand2, Pencil, Search, Loader2, Upload, FileUp, Shield } from "lucide-react"
-import { Highlight, themes } from "prism-react-renderer"
 
 import { useSupabase, type RlsPolicy } from "@/lib/supabase-context"
 import { Button } from "@/components/ui/button"
@@ -19,6 +20,10 @@ import {
 } from "@/components/ui/select"
 import { Badge } from "@/components/ui/badge"
 import { Card, CardContent } from "@/components/ui/card"
+import { JsonViewer } from "@/components/supabase-pwn/shared/json-viewer"
+import { StatusBadge, type Severity } from "@/components/supabase-pwn/shared/status-badge"
+import { EmptyState } from "@/components/supabase-pwn/shared/empty-state"
+import { ReticlePanel } from "@/components/supabase-pwn/shared/reticle-panel"
 
 
 // ---------------------------------------------------------------------------
@@ -52,7 +57,7 @@ const FILTER_OPERATORS = [
 
 function createFilterRow(): FilterRow {
   return {
-    id: crypto.randomUUID(),
+    id: uuid(),
     column: "",
     operator: "eq",
     value: "",
@@ -67,7 +72,7 @@ function generateFakeValue(type: string, columnName: string): unknown {
   const n = (columnName ?? "").toLowerCase()
 
   // Column-name-based hints
-  if (n.includes("email")) return `pwn-${crypto.randomUUID().slice(0, 8)}@j5.no`
+  if (n.includes("email")) return `pwn-${uuid().slice(0, 8)}@j5.no`
   if (n.includes("phone")) return "+15550" + String(Math.floor(Math.random() * 100000)).padStart(5, "0")
   if (n.includes("url") || n.includes("website") || n.includes("link")) return "https://example.com"
   if (n.includes("first") && n.includes("name")) return "Jane"
@@ -92,11 +97,11 @@ function generateFakeValue(type: string, columnName: string): unknown {
   if (n.includes("rating") || n.includes("score")) return 4.5
 
   // Type-based generation
-  if (t === "uuid") return crypto.randomUUID()
+  if (t === "uuid") return uuid()
   if (t === "integer" || t === "int4" || t === "int8" || t === "bigint") return Math.floor(Math.random() * 1000)
   if (t === "smallint" || t === "int2") return Math.floor(Math.random() * 100)
   if (t === "boolean" || t === "bool") return true
-  if (t === "text" || t === "character varying" || t === "varchar" || t === "string") return "test_" + crypto.randomUUID().slice(0, 8)
+  if (t === "text" || t === "character varying" || t === "varchar" || t === "string") return "test_" + uuid().slice(0, 8)
   if (t.includes("timestamp") || t === "timestamptz") return new Date().toISOString()
   if (t === "date") return new Date().toISOString().split("T")[0]
   if (t === "time" || t.includes("time without") || t === "timetz") return "12:00:00"
@@ -107,27 +112,6 @@ function generateFakeValue(type: string, columnName: string): unknown {
   if (t === "macaddr") return "00:11:22:33:44:55"
 
   return "test_value"
-}
-
-function JsonResult({ json }: { json: string }) {
-  return (
-    <Highlight theme={themes.vsDark} code={json} language="json">
-      {({ style, tokens, getLineProps, getTokenProps }) => (
-        <pre
-          style={style}
-          className="text-xs p-3 rounded overflow-x-auto max-h-96"
-        >
-          {tokens.map((line, i) => (
-            <div key={i} {...getLineProps({ line })}>
-              {line.map((token, key) => (
-                <span key={key} {...getTokenProps({ token })} />
-              ))}
-            </div>
-          ))}
-        </pre>
-      )}
-    </Highlight>
-  )
 }
 
 // ---------------------------------------------------------------------------
@@ -403,10 +387,10 @@ function SelectTab({
                   {(() => {
                     try {
                       const rows = JSON.parse(result)
-                      if (!Array.isArray(rows)) return <JsonResult json={result} />
+                      if (!Array.isArray(rows)) return <JsonViewer json={result} copyable />
                       return rows.map((row: Record<string, unknown>, i: number) => (
                         <div key={i} className="group relative">
-                          <JsonResult json={JSON.stringify(row, null, 2)} />
+                          <JsonViewer json={JSON.stringify(row, null, 2)} />
                           <Button
                             variant="secondary"
                             size="sm"
@@ -419,12 +403,12 @@ function SelectTab({
                         </div>
                       ))
                     } catch {
-                      return <JsonResult json={result} />
+                      return <JsonViewer json={result} copyable />
                     }
                   })()}
                 </div>
               ) : (
-                <JsonResult json={result} />
+                <JsonViewer json={result} copyable />
               )}
             </div>
           </CardContent>
@@ -530,7 +514,7 @@ function InsertTab({
         <Card>
           <CardContent className="p-3">
             <div className="max-h-[28rem] overflow-y-auto">
-              <JsonResult json={result} />
+              <JsonViewer json={result} copyable />
             </div>
           </CardContent>
         </Card>
@@ -569,7 +553,7 @@ function UpdateTab({
     setJsonData(JSON.stringify(updateData, null, 2))
     if (prefill.idColumn && prefill.idValue !== undefined) {
       setFilters([{
-        id: crypto.randomUUID(),
+        id: uuid(),
         column: prefill.idColumn,
         operator: "eq",
         value: String(prefill.idValue),
@@ -698,7 +682,7 @@ function UpdateTab({
         <Card>
           <CardContent className="p-3">
             <div className="max-h-[28rem] overflow-y-auto">
-              <JsonResult json={result} />
+              <JsonViewer json={result} copyable />
             </div>
           </CardContent>
         </Card>
@@ -762,7 +746,7 @@ function DeleteTab({
   return (
     <div className="space-y-4">
       {/* Warning */}
-      <div className="rounded-md border border-yellow-500/50 bg-yellow-500/10 px-3 py-2 text-sm text-yellow-400">
+      <div className="rounded-sm border border-warning/40 bg-warning/10 px-3 py-2 text-sm text-warning">
         This will delete matching rows. Use filters to target specific rows.
       </div>
 
@@ -788,7 +772,7 @@ function DeleteTab({
         <Card>
           <CardContent className="p-3">
             <div className="max-h-[28rem] overflow-y-auto">
-              <JsonResult json={result} />
+              <JsonViewer json={result} copyable />
             </div>
           </CardContent>
         </Card>
@@ -803,7 +787,7 @@ function DeleteTab({
 
 function RpcTab() {
   const { client, schema, addLog } = useSupabase()
-  const functions = schema?.functions ?? []
+  const functions = useMemo(() => schema?.functions ?? [], [schema])
 
   const [fnName, setFnName] = useState("")
   const [args, setArgs] = useState("")
@@ -895,7 +879,7 @@ function RpcTab() {
               <Badge key={p.name} variant="secondary" className="text-xs font-mono">
                 {p.name}
                 <span className="ml-1 text-muted-foreground">{p.format ?? p.type}</span>
-                {p.required && <span className="ml-1 text-red-400">*</span>}
+                {p.required && <span className="ml-1 text-danger">*</span>}
               </Badge>
             ))}
           </div>
@@ -945,7 +929,7 @@ function RpcTab() {
         <Card>
           <CardContent className="p-3">
             <div className="max-h-[28rem] overflow-y-auto">
-              <JsonResult json={result} />
+              <JsonViewer json={result} copyable />
             </div>
           </CardContent>
         </Card>
@@ -958,12 +942,12 @@ function RpcTab() {
 // RLS Policies Tab
 // ---------------------------------------------------------------------------
 
-const COMMAND_COLORS: Record<string, string> = {
-  SELECT: "bg-blue-600",
-  INSERT: "bg-green-600",
-  UPDATE: "bg-amber-600",
-  DELETE: "bg-red-600",
-  ALL: "bg-purple-600",
+const COMMAND_SEVERITY: Record<string, Severity> = {
+  SELECT: "info",
+  INSERT: "safe",
+  UPDATE: "warning",
+  DELETE: "critical",
+  ALL: "neutral",
 }
 
 function RlsPoliciesTab({
@@ -989,11 +973,11 @@ function RlsPoliciesTab({
 
   if (policies.length === 0) {
     return (
-      <div className="space-y-3">
-        <p className="text-sm text-muted-foreground">
-          No RLS policies loaded. Import a schema dump to view policies.
-        </p>
-      </div>
+      <EmptyState
+        icon={Shield}
+        title="No RLS policies loaded"
+        description="Import a schema dump to view policies."
+      />
     )
   }
 
@@ -1039,9 +1023,9 @@ function RlsPoliciesTab({
                   <Badge variant="outline" className="font-mono text-xs">
                     {policy.table}
                   </Badge>
-                  <Badge className={`text-xs text-white ${COMMAND_COLORS[policy.command] ?? "bg-slate-600"}`}>
+                  <StatusBadge severity={COMMAND_SEVERITY[policy.command] ?? "neutral"} dot={false}>
                     {policy.command}
-                  </Badge>
+                  </StatusBadge>
                   <span className="text-sm font-medium">{policy.name}</span>
                 </div>
                 {policy.using && (
@@ -1061,7 +1045,7 @@ function RlsPoliciesTab({
                   </div>
                 )}
                 {!policy.using && !policy.withCheck && (
-                  <p className="text-xs text-yellow-400">
+                  <p className="text-xs text-warning">
                     No USING or WITH CHECK clause — may allow unrestricted access
                   </p>
                 )}
@@ -1079,7 +1063,7 @@ function RlsPoliciesTab({
 // ---------------------------------------------------------------------------
 
 export function DatabaseExplorer() {
-  const { client, schema, hints, discoverTables, importSchemaDump, addLog } = useSupabase()
+  const { client, schema, hints, discoverTables, importSchemaDump, addLog, focusTarget } = useSupabase()
 
   const [selectedTable, setSelectedTable] = useState("")
   const [discovering, setDiscovering] = useState(false)
@@ -1095,7 +1079,17 @@ export function DatabaseExplorer() {
   const [addTableName, setAddTableName] = useState("")
   const fileInputRef = useRef<HTMLInputElement>(null)
 
-  const schemaTables = schema?.tables ?? []
+  // Respond to a cross-tab focus request (a finding jumping to its table).
+  // setState-during-render pattern (no effect) so it's synchronous & lint-clean.
+  const [seenFocus, setSeenFocus] = useState(focusTarget)
+  if (focusTarget !== seenFocus) {
+    setSeenFocus(focusTarget)
+    if (focusTarget && focusTarget.kind === "database" && focusTarget.name) {
+      setSelectedTable(focusTarget.name)
+    }
+  }
+
+  const schemaTables = useMemo(() => schema?.tables ?? [], [schema])
   const rlsPolicies = schema?.rlsPolicies ?? []
 
   // Tables shown in the selector = confirmed schema tables ∪ JS-discovered hints
@@ -1138,9 +1132,10 @@ export function DatabaseExplorer() {
 
   if (!client || !schema) {
     return (
-      <div className="flex items-center justify-center p-8 text-sm text-muted-foreground">
-        Connect to a Supabase project to explore the database.
-      </div>
+      <EmptyState
+        icon={Shield}
+        title="Connect to a Supabase project to explore the database."
+      />
     )
   }
 
@@ -1337,14 +1332,19 @@ export function DatabaseExplorer() {
               {col.name}
               <span className="ml-1 text-muted-foreground">{col.type}</span>
               {col.required && (
-                <span className="ml-1 text-red-400">*</span>
+                <span className="ml-1 text-danger">*</span>
               )}
             </Badge>
           ))}
         </div>
       )}
 
-      {/* Operation tabs */}
+      {/* Operation tabs — reticle frames the table currently in focus */}
+      <ReticlePanel
+        active={!!selectedTable}
+        label={selectedTable ? `TBL:${selectedTable}` : "TBL"}
+        className="flex flex-1 flex-col"
+      >
       <Tabs value={activeOpTab} onValueChange={setActiveOpTab} className="flex-1">
         <TabsList>
           <TabsTrigger value="select" disabled={!selectedTable}>Select</TabsTrigger>
@@ -1424,6 +1424,7 @@ export function DatabaseExplorer() {
           </Card>
         </TabsContent>
       </Tabs>
+      </ReticlePanel>
     </div>
   )
 }
