@@ -14,9 +14,13 @@ Ideia descartada não volta a ser sugerida; o motivo fica registrado.
 - [x] **Filtro "🔎 clues" no Output Log** (P) — chip que filtra só as pistas · _feita_
 
 ## 2026-09-23 · a partir de "Segredos em valores + bruteforce de colunas + filtro"
-- [ ] **Pistas em nomes de arquivo no Storage** (P) — ao listar arquivos de um bucket, sinalizar nomes suspeitos (`.env`, `backup`, `dump.sql`, `id_rsa`, `.pem`, `credentials`) como CLUE · `components/supabase-pwn/storage-explorer.tsx` + `lib/sensitive.ts` · _proposta_
-- [ ] **Decodificar JWTs achados nos valores** (M) — quando um valor é um JWT, decodificar o payload e mostrar role/exp na pista (um `service_role` vazado num campo é ouro) · `lib/sensitive.ts` · _proposta_
-- [ ] **Exportar só as pistas** (P) — botão pra copiar todas as CLUE (o filtro já existe) pro report rápido · `components/supabase-pwn/output-log.tsx` · _proposta_
+- [x] **Pistas em nomes de arquivo no Storage** (P) — `sensitiveFileHint` sinaliza `.env`/backup/dump/etc ao listar · _feita_
+- [x] **Decodificar JWTs achados nos valores** (M) — `describeJwtsInRow` mostra role/exp; service_role vazado vira CRITICAL · _feita_
+- [x] **Exportar só as pistas** (P) — botão de copiar CLUE no Output Log · _feita_
+
+## 2026-09-23 · a partir de "Arquivos no Storage + decode JWT + copiar clues"
+- [ ] **Escanear respostas de RPC/Edge/Realtime por segredos** (M) — reusa `flagSensitiveValues`/`describeJwtsInRow` nas respostas dessas telas; hoje só DB e Storage geram pistas · `edge-functions.tsx`, `realtime.tsx`, `database-explorer.tsx` (RpcTab) · _proposta_
+- [ ] **Role do JWT nos findings/export do AutoPwn** (P) — o bruteforce já mostra role/exp; incluir no findings e no relatório exportado pra consistência · `lib/findings.ts` · _proposta_
 
 ## ⏸️ PENDENTE (bloqueado — ação de conta, não código)
 - [ ] **Publicar imagem no GHCR** — a Action (`.github/workflows/docker.yml`) está pronta mas o **GitHub Actions está bloqueado por billing** na conta. Destravar: resolver billing (Settings → Billing) → Action publica no push → tornar o package GHCR público. Alternativa sem Actions: PAT com `write:packages` e publicar manualmente. _blocked_

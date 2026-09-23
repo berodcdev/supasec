@@ -123,28 +123,55 @@ export function decodeJwtClaims(token: string): Record<string, unknown> | null {
   }
 }
 
+const JWT_RE = /eyJ[A-Za-z0-9_-]{8,}\.eyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]+/g
+
+function describeJwtsInString(s: string): string[] {
+  const out = new Set<string>()
+  JWT_RE.lastIndex = 0
+  let m: RegExpExecArray | null
+  while ((m = JWT_RE.exec(s)) !== null) {
+    const claims = decodeJwtClaims(m[0])
+    if (!claims) continue
+    const role = claims.role ? String(claims.role) : "?"
+    const exp =
+      typeof claims.exp === "number"
+        ? new Date(claims.exp * 1000).toISOString().slice(0, 10)
+        : "?"
+    out.add(`role=${role}, exp=${exp}`)
+  }
+  return [...out]
+}
+
 /** Describe any JWTs embedded in a row's values (role + expiry) — leaked
  *  service_role tokens are the crown jewels. */
 export function describeJwtsInRow(row: Record<string, unknown>): string[] {
-  const re = /eyJ[A-Za-z0-9_-]{8,}\.eyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]+/g
   const out = new Set<string>()
   for (const val of Object.values(row)) {
     if (val == null) continue
     const s = typeof val === "string" ? val : JSON.stringify(val)
-    re.lastIndex = 0
-    let m: RegExpExecArray | null
-    while ((m = re.exec(s)) !== null) {
-      const claims = decodeJwtClaims(m[0])
-      if (!claims) continue
-      const role = claims.role ? String(claims.role) : "?"
-      const exp =
-        typeof claims.exp === "number"
-          ? new Date(claims.exp * 1000).toISOString().slice(0, 10)
-          : "?"
-      out.add(`role=${role}, exp=${exp}`)
-    }
+    for (const d of describeJwtsInString(s)) out.add(d)
   }
   return [...out]
+}
+
+/** Scan an arbitrary JSON response (any shape) for secret-looking content and
+ *  embedded JWTs — used on RPC / Edge Function / Realtime payloads. */
+export function scanJsonForSecrets(data: unknown): {
+  kinds: string[]
+  jwts: string[]
+} {
+  let s: string
+  try {
+    s = typeof data === "string" ? data : JSON.stringify(data)
+  } catch {
+    return { kinds: [], jwts: [] }
+  }
+  if (!s || s.length > 200000) return { kinds: [], jwts: [] }
+  const kinds = new Set<string>()
+  for (const { kind, re } of VALUE_SIGNATURES) {
+    if (re.test(s)) kinds.add(kind)
+  }
+  return { kinds: [...kinds], jwts: describeJwtsInString(s) }
 }
 
 /**

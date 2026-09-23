@@ -6,6 +6,7 @@ import { useCallback, useState } from "react"
 import { Plus, X, Play, Zap } from "lucide-react"
 
 import { useSupabase } from "@/lib/supabase-context"
+import { scanJsonForSecrets } from "@/lib/sensitive"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -131,6 +132,17 @@ export function EdgeFunctions() {
           displayData = data
         }
         setResult(JSON.stringify(displayData, null, 2))
+        const { kinds, jwts } = scanJsonForSecrets(displayData)
+        if (kinds.length > 0 || jwts.length > 0) {
+          const parts: string[] = []
+          if (kinds.length > 0) parts.push(`secrets: ${kinds.join(", ")}`)
+          if (jwts.length > 0) parts.push(`JWT(s): ${jwts.join(" | ")}`)
+          addLog(
+            "warning",
+            `🔎 CLUE — edge function "${name}" response — ${parts.join("; ")}`,
+            { function: name },
+          )
+        }
       }
     } catch (err) {
       const msg = err instanceof Error ? err.message : "Unknown error"
