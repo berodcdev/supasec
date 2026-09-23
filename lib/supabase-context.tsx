@@ -1,6 +1,7 @@
 "use client"
 
 import { uuid } from "@/lib/utils"
+import { flagSensitiveColumns, sensitiveTableHint } from "@/lib/sensitive"
 
 import {
   createContext,
@@ -818,17 +819,43 @@ export function SupabaseProvider({ children }: { children: ReactNode }) {
           // Table exists
           discovered.push(r.table)
           existing.add(r.table)
+          const tableHint = sensitiveTableHint(r.table)
           if (Array.isArray(r.data) && r.data.length > 0) {
             const rows = r.data as Record<string, unknown>[]
             const first = rows[0]
-            columns[r.table] = Object.keys(first).map((name) => ({
+            const colNames = Object.keys(first)
+            columns[r.table] = colNames.map((name) => ({
               name,
               type: inferColumnType(first[name]),
               required: false,
             }))
+            const sensCols = flagSensitiveColumns(colNames)
+            if (sensCols.length > 0) {
+              // The strongest lead: readable table with PII/secret columns.
+              addLog(
+                "warning",
+                `🔎 CLUE — "${r.table}" exposes sensitive data: ${sensCols.join(", ")} (${rows.length} row visible, ${colNames.length} cols)`,
+                { table: r.table, sensitiveColumns: sensCols, columns: colNames, sample: first },
+              )
+            } else if (tableHint) {
+              addLog(
+                "warning",
+                `🔎 CLUE — sensitive-looking table "${r.table}" is readable (${rows.length} row visible, ${colNames.length} cols)`,
+                { table: r.table, matched: tableHint, columns: colNames, sample: first },
+              )
+            } else {
+              // Still attach the sample so it can be expanded in the log.
+              addLog(
+                "success",
+                `Found: ${r.table} (${rows.length} row visible, ${colNames.length} cols)`,
+                { columns: colNames, sample: first },
+              )
+            }
+          } else if (tableHint) {
             addLog(
-              "success",
-              `Found: ${r.table} (${rows.length} row visible, ${Object.keys(first).length} cols)`,
+              "warning",
+              `🔎 CLUE — sensitive-looking table "${r.table}" exists (empty or RLS blocked)`,
+              { table: r.table, matched: tableHint },
             )
           } else {
             addLog("success", `Found: ${r.table} (empty or RLS blocked)`)
@@ -837,7 +864,13 @@ export function SupabaseProvider({ children }: { children: ReactNode }) {
           // PGRST205 hint revealed a different table name
           if (!existing.has(r.hint) && !discovered.includes(r.hint) && !hintedNames.has(r.hint)) {
             hintedNames.add(r.hint)
-            addLog("info", `Hint from "${r.table}": server suggested "${r.hint}"`)
+            const hintSensitive = sensitiveTableHint(r.hint)
+            addLog(
+              hintSensitive ? "warning" : "info",
+              hintSensitive
+                ? `🔎 CLUE — server revealed sensitive-looking table "${r.hint}" (via "${r.table}")`
+                : `Hint from "${r.table}": server suggested "${r.hint}"`,
+            )
           }
         }
       }

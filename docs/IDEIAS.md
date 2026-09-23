@@ -3,6 +3,9 @@
 Gerado pela skill `sugerir`. Status: proposta · aceita · descartada · feita.
 Ideia descartada não volta a ser sugerida; o motivo fica registrado.
 
+## ⏸️ PENDENTE (bloqueado — ação de conta, não código)
+- [ ] **Publicar imagem no GHCR** — a Action (`.github/workflows/docker.yml`) está pronta mas o **GitHub Actions está bloqueado por billing** na conta. Destravar: resolver billing (Settings → Billing) → Action publica no push → tornar o package GHCR público. Alternativa sem Actions: PAT com `write:packages` e publicar manualmente. _blocked_
+
 ## 2026-09-23 · a partir de "Instalador local de um comando"
 - [ ] **Imagem publicada no GHCR (GitHub Action)** (M) — hoje o install builda o source localmente (~1-2min + precisa do repo); uma Action que builda e publica `ghcr.io/berodcdev/supabase-pwn:latest` deixaria o install só `docker run` da imagem, sem clonar/buildar — é o que torna a ferramenta distribuível de verdade · `.github/workflows/`, `install.sh` · _proposta_
 - [ ] **`install.sh --uninstall`** (P) — ferramenta boa também sai limpo: `compose down` + remove imagem/volume; hoje só tem instalar/atualizar · `install.sh` · _proposta_
