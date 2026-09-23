@@ -3,6 +3,11 @@
 Gerado pela skill `sugerir`. Status: proposta · aceita · descartada · feita.
 Ideia descartada não volta a ser sugerida; o motivo fica registrado.
 
+## 2026-09-23 · a partir de "Deploy na VPS srv1 (Traefik + Authelia)"
+- [ ] **Auto-deploy no push** (M) — deploy key + repo já configurados; um `git pull && docker compose -f docker-compose.srv1.yml up -d --build` via webhook/cron fecharia o ciclo · `srv1` · _proposta_
+- [ ] **IPAllowList no Traefik antes do Authelia** (P) — encadear um middleware de IP allowlist antes do `authelia@docker` corta scan automatizado antes do login · `docker-compose.srv1.yml` · _proposta_
+- [ ] **Healthcheck válido do Authelia** (P) — hoje está desabilitado; um healthcheck correto (HTTP no /api/health) reativa restart-on-unhealthy sem travar o Traefik · `docker-compose.srv1.yml` · _proposta_
+
 ## 2026-09-23 · a partir de "Stack de produção: Caddy + Authelia + app"
 - [ ] **Healthcheck no serviço do app** (P) — o compose tem healthcheck no Authelia, mas o app não; um `/api/health` + healthcheck faz o `restart: unless-stopped` e o `depends_on` valerem de verdade · `app/api/health/route.ts`, `docker-compose.prod.yml` · _proposta_
 - [ ] **Allowlist de IP no Caddy** (P) — pra uma ferramenta ofensiva pública, limitar por IP de origem no Caddy (além do OTP) corta scan automatizado antes do login · `deploy/Caddyfile` · _proposta_

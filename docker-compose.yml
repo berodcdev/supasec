@@ -1,8 +1,15 @@
+# Local install — runs supabase-pwn on http://localhost:3000 (loopback only,
+# so it's reachable ONLY from this machine — no auth needed). Driven by
+# ./install.sh. Supabase credentials are entered in the UI at runtime, so there
+# is nothing to configure here.
 services:
   supabase-pwn:
     build: .
+    image: supabase-pwn:latest
     container_name: supabase-pwn
-    # Preso ao loopback do host: acessivel so nesta maquina, sem exposicao na LAN.
+    environment:
+      NODE_ENV: production
+      NEXT_TELEMETRY_DISABLED: "1"
     ports:
-      - "127.0.0.1:3000:3000"
+      - "127.0.0.1:${APP_PORT:-3000}:3000"
     restart: unless-stopped
