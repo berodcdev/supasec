@@ -1,0 +1,8 @@
+services:
+  supabase-pwn:
+    build: .
+    container_name: supabase-pwn
+    # Preso ao loopback do host: acessivel so nesta maquina, sem exposicao na LAN.
+    ports:
+      - "127.0.0.1:3000:3000"
+    restart: unless-stopped

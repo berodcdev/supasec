@@ -1,7 +1,7 @@
 "use client"
 
 import { useEffect, useState } from "react"
-import { ChevronDown, ChevronRight, Loader2, Globe } from "lucide-react"
+import { ChevronDown, ChevronRight, Loader2, Globe, ShieldAlert } from "lucide-react"
 import { toast } from "sonner"
 
 import { useSupabase, detectKeyType } from "@/lib/supabase-context"
@@ -12,6 +12,7 @@ import { Textarea } from "@/components/ui/textarea"
 import { Label } from "@/components/ui/label"
 import { Badge } from "@/components/ui/badge"
 import { Switch } from "@/components/ui/switch"
+import { StatusBadge, type Severity } from "@/components/supabase-pwn/shared/status-badge"
 import {
   Collapsible,
   CollapsibleContent,
@@ -66,12 +67,12 @@ function saveConfig(projectUrl: string, apiKey: string) {
   }
 }
 
-const KEY_TYPE_LABELS: Record<string, { label: string; color: string }> = {
-  publishable: { label: "Publishable", color: "bg-sky-600" },
-  secret: { label: "Secret", color: "bg-red-500" },
-  anon: { label: "Anon (JWT)", color: "bg-slate-600" },
-  service_role: { label: "Service Role (JWT)", color: "bg-amber-600" },
-  unknown: { label: "Unknown", color: "bg-slate-500" },
+const KEY_TYPE_LABELS: Record<string, { label: string; severity: Severity }> = {
+  publishable: { label: "Publishable", severity: "safe" },
+  secret: { label: "Secret", severity: "critical" },
+  anon: { label: "Anon (JWT)", severity: "info" },
+  service_role: { label: "Service Role (JWT)", severity: "critical" },
+  unknown: { label: "Unknown", severity: "neutral" },
 }
 
 function clearConfig() {
@@ -90,7 +91,10 @@ export function InitForm() {
     initialize,
     disconnect,
     mergeHints,
+    triggerScan,
   } = useSupabase()
+
+  const [autoScan, setAutoScan] = useState(false)
 
   const [url, setUrl] = useState("")
   const [key, setKey] = useState("")
@@ -109,7 +113,21 @@ export function InitForm() {
       setUrl(config.projectUrl)
       setKey(config.apiKey)
     }
+    try {
+      setAutoScan(localStorage.getItem("supabase-pwn-autoscan") === "1")
+    } catch {
+      // localStorage may be unavailable — ignore
+    }
   }, [])
+
+  function toggleAutoScan(v: boolean) {
+    setAutoScan(v)
+    try {
+      localStorage.setItem("supabase-pwn-autoscan", v ? "1" : "0")
+    } catch {
+      // ignore
+    }
+  }
 
   // Auto-collapse when connected, expand when disconnected
   useEffect(() => {
@@ -125,6 +143,7 @@ export function InitForm() {
     try {
       await initialize(url.trim(), key.trim())
       saveConfig(url.trim(), key.trim())
+      if (autoScan) triggerScan()
     } catch (err) {
       toast.error(
         err instanceof Error ? err.message : "Failed to initialize connection",
@@ -145,6 +164,7 @@ export function InitForm() {
     try {
       await initialize(c.projectUrl, c.apiKey)
       saveConfig(c.projectUrl, c.apiKey)
+      if (autoScan) triggerScan()
     } catch (err) {
       toast.error(
         err instanceof Error ? err.message : "Failed to initialize connection",
@@ -187,7 +207,14 @@ export function InitForm() {
       const list: ExtractCandidate[] = data.candidates ?? []
 
       if (list.length === 0) {
-        toast.error("No Supabase config found in scanned scripts")
+        const scripts: number = data.scannedScripts ?? 0
+        const entries: number = data.scannedEntries ?? 0
+        toast.error(
+          scripts === 0
+            ? `No scripts could be fetched (${entries} page(s)). The site may block server-side fetches or render only via JS — try the exact page where the app talks to Supabase, or enable crawl.`
+            : `No Supabase config found — scanned ${scripts} script(s) across ${entries} page(s). Point at the page where login/data loads, or enable "Crawl 1 level".`,
+          { duration: 8000 },
+        )
         return
       }
 
@@ -241,20 +268,26 @@ export function InitForm() {
                   <Badge className="bg-primary text-primary-foreground hover:bg-primary">
                     Connected
                   </Badge>
-                  <Badge className={`${KEY_TYPE_LABELS[keyType].color} text-white hover:${KEY_TYPE_LABELS[keyType].color}`}>
+                  <StatusBadge severity={KEY_TYPE_LABELS[keyType].severity} dot={false}>
                     {KEY_TYPE_LABELS[keyType].label}
-                  </Badge>
+                  </StatusBadge>
                 </>
               )}
             </div>
             {initialized && (
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={handleDisconnect}
-              >
-                Disconnect
-              </Button>
+              <div className="flex items-center gap-2">
+                <Button variant="default" size="sm" onClick={triggerScan}>
+                  <ShieldAlert className="h-3.5 w-3.5" />
+                  Run scan
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handleDisconnect}
+                >
+                  Disconnect
+                </Button>
+              </div>
             )}
           </div>
           {initialized && !isOpen && (
@@ -346,9 +379,9 @@ export function InitForm() {
                   const kt = detectKeyType(key.trim())
                   const info = KEY_TYPE_LABELS[kt]
                   return (
-                    <Badge className={`${info.color} text-white text-[10px] px-1.5 py-0`}>
+                    <StatusBadge severity={info.severity} dot={false} className="text-[10px]">
                       {info.label}
-                    </Badge>
+                    </StatusBadge>
                   )
                 })()}
               </div>
@@ -367,6 +400,20 @@ export function InitForm() {
                 data-form-type="other"
               />
             </div>
+
+            {!initialized && (
+              <div className="flex items-center gap-2">
+                <Switch
+                  id="auto-scan"
+                  checked={autoScan}
+                  onCheckedChange={toggleAutoScan}
+                  disabled={loading}
+                />
+                <Label htmlFor="auto-scan" className="cursor-pointer text-xs">
+                  Auto-scan after connect (runs AutoPwn immediately)
+                </Label>
+              </div>
+            )}
 
             {!initialized && (
               <Button
@@ -418,9 +465,9 @@ export function InitForm() {
                     </div>
                   </div>
                   {kindInfo ? (
-                    <Badge className={`${kindInfo.color} text-white text-[10px]`}>
+                    <StatusBadge severity={kindInfo.severity} dot={false} className="text-[10px]">
                       {kindInfo.label}
-                    </Badge>
+                    </StatusBadge>
                   ) : (
                     <Badge variant="outline" className="text-[10px]">
                       no key

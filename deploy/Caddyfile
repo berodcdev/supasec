@@ -1,0 +1,26 @@
+# Caddy reverse proxy — automatic HTTPS (Let's Encrypt) for both hostnames.
+# Replace supasec.nodetp.com.br everywhere with your real domain (see deploy/README.md).
+# Both auth.<domain> and pwn.<domain> must have DNS A records → this server,
+# and ports 80 + 443 must be open.
+
+{
+	# ACME account email for Let's Encrypt certificate notices.
+	email you@supasec.nodetp.com.br
+}
+
+# --- Authelia login portal ---------------------------------------------------
+auth.supasec.nodetp.com.br {
+	reverse_proxy authelia:9091
+}
+
+# --- The app, gated by Authelia (two-factor / TOTP) --------------------------
+supasec.nodetp.com.br {
+	# Every request is checked against Authelia first. Unauthenticated users are
+	# bounced to the portal; after login + TOTP they come back here.
+	forward_auth authelia:9091 {
+		uri /api/authz/forward-auth
+		copy_headers Remote-User Remote-Groups Remote-Name Remote-Email
+	}
+
+	reverse_proxy supabase-pwn:3000
+}

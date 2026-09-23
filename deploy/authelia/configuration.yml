@@ -1,0 +1,65 @@
+# Authelia configuration — file-based users, TOTP second factor, no SMTP.
+# Secrets are injected via environment (.env.prod), NOT written here.
+# Replace supasec.nodetp.com.br with your real domain (3 places below).
+
+theme: 'dark'
+
+server:
+  address: 'tcp://0.0.0.0:9091'
+
+log:
+  level: 'info'
+
+# One-time-password (authenticator app) settings.
+totp:
+  issuer: 'supabase-pwn'
+  period: 30
+  skew: 1
+
+authentication_backend:
+  # No self-service password reset (keeps us off SMTP / extra secrets).
+  password_reset:
+    disable: true
+  file:
+    path: '/config/users_database.yml'
+    password:
+      algorithm: 'argon2'
+      argon2:
+        variant: 'argon2id'
+        iterations: 3
+        memory: 65536
+        parallelism: 4
+
+# Deny everything by default; the app host requires 1FA + TOTP.
+access_control:
+  default_policy: 'deny'
+  rules:
+    - domain: 'supasec.nodetp.com.br'
+      policy: 'two_factor'
+
+session:
+  name: 'authelia_session'
+  expiration: '8 hours'
+  inactivity: '1 hour'
+  remember_me: '1 month'
+  # secret comes from AUTHELIA_SESSION_SECRET (.env.prod)
+  cookies:
+    - domain: 'supasec.nodetp.com.br'
+      authelia_url: 'https://auth.supasec.nodetp.com.br'
+      default_redirection_url: 'https://supasec.nodetp.com.br'
+
+# Brute-force protection on the login form.
+regulation:
+  max_retries: 3
+  find_time: '2 minutes'
+  ban_time: '5 minutes'
+
+storage:
+  local:
+    path: '/config/db.sqlite3'
+  # encryption key comes from AUTHELIA_STORAGE_ENCRYPTION_KEY (.env.prod)
+
+# TOTP-enrollment confirmations are written to a file instead of emailed.
+notifier:
+  filesystem:
+    filename: '/config/notification.txt'

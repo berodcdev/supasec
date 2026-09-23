@@ -1,5 +1,7 @@
 "use client"
 
+import { uuid } from "@/lib/utils"
+
 import { useCallback, useEffect, useRef, useState } from "react"
 import {
   Radio,
@@ -11,7 +13,6 @@ import {
   Wifi,
   WifiOff,
 } from "lucide-react"
-import { Highlight, themes } from "prism-react-renderer"
 import type { RealtimeChannel } from "@supabase/supabase-js"
 
 import { useSupabase } from "@/lib/supabase-context"
@@ -30,6 +31,11 @@ import {
 } from "@/components/ui/select"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { Separator } from "@/components/ui/separator"
+import { JsonViewer } from "@/components/supabase-pwn/shared/json-viewer"
+import {
+  StatusBadge,
+  type Severity,
+} from "@/components/supabase-pwn/shared/status-badge"
 
 // ---------------------------------------------------------------------------
 // Types
@@ -51,23 +57,13 @@ type RealtimeEvent = {
 // Helpers
 // ---------------------------------------------------------------------------
 
-function eventBadgeColor(type: RealtimeEvent["type"]): string {
-  switch (type) {
-    case "postgres_changes":
-      return "bg-blue-600 text-white"
-    case "broadcast":
-      return "bg-purple-600 text-white"
-    case "presence_sync":
-      return "bg-green-600 text-white"
-    case "presence_join":
-      return "bg-emerald-600 text-white"
-    case "presence_leave":
-      return "bg-orange-600 text-white"
-    case "system":
-      return "bg-gray-600 text-white"
-    default:
-      return "bg-gray-600 text-white"
-  }
+const EVENT_SEVERITY: Record<RealtimeEvent["type"], Severity> = {
+  postgres_changes: "info",
+  broadcast: "info",
+  presence_sync: "safe",
+  presence_join: "safe",
+  presence_leave: "warning",
+  system: "neutral",
 }
 
 function formatTimestamp(date: Date): string {
@@ -78,27 +74,6 @@ function formatTimestamp(date: Date): string {
     second: "2-digit",
     fractionalSecondDigits: 3,
   })
-}
-
-function JsonBlock({ json }: { json: string }) {
-  return (
-    <Highlight theme={themes.vsDark} code={json} language="json">
-      {({ style, tokens, getLineProps, getTokenProps }) => (
-        <pre
-          style={style}
-          className="text-xs p-2 rounded overflow-x-auto max-h-48"
-        >
-          {tokens.map((line, i) => (
-            <div key={i} {...getLineProps({ line })}>
-              {line.map((token, key) => (
-                <span key={key} {...getTokenProps({ token })} />
-              ))}
-            </div>
-          ))}
-        </pre>
-      )}
-    </Highlight>
-  )
 }
 
 // ---------------------------------------------------------------------------
@@ -174,7 +149,7 @@ function ChannelManager({
                     onClick={() => onSelect(ch.name)}
                   >
                     <span className="flex items-center gap-2">
-                      <Wifi className="size-3 text-green-500" />
+                      <Wifi className="size-3 text-success" />
                       <span className="font-mono text-xs">{ch.name}</span>
                     </span>
                     <Button
@@ -252,7 +227,7 @@ function PostgresChangesSection({
     channel
       .on("postgres_changes", filter, (payload) => {
         onEvent({
-          id: crypto.randomUUID(),
+          id: uuid(),
           timestamp: new Date(),
           type: "postgres_changes",
           payload,
@@ -276,9 +251,9 @@ function PostgresChangesSection({
           <Radio className="size-4" />
           Postgres Changes
           {listening && (
-            <Badge className="bg-green-600 text-white text-[10px]">
+            <StatusBadge severity="safe" pulse>
               Listening
-            </Badge>
+            </StatusBadge>
           )}
         </CardTitle>
       </CardHeader>
@@ -462,11 +437,7 @@ function PresenceSection({
 
   // Set up presence listeners when channel changes
   useEffect(() => {
-    if (!channel) {
-      setPresenceState({})
-      setSynced(false)
-      return
-    }
+    if (!channel) return
 
     channel
       .on("presence", { event: "sync" }, () => {
@@ -474,7 +445,7 @@ function PresenceSection({
         setPresenceState(state as Record<string, unknown[]>)
         setSynced(true)
         onEvent({
-          id: crypto.randomUUID(),
+          id: uuid(),
           timestamp: new Date(),
           type: "presence_sync",
           payload: state,
@@ -482,7 +453,7 @@ function PresenceSection({
       })
       .on("presence", { event: "join" }, ({ key, newPresences }) => {
         onEvent({
-          id: crypto.randomUUID(),
+          id: uuid(),
           timestamp: new Date(),
           type: "presence_join",
           payload: { key, newPresences },
@@ -491,13 +462,18 @@ function PresenceSection({
       })
       .on("presence", { event: "leave" }, ({ key, leftPresences }) => {
         onEvent({
-          id: crypto.randomUUID(),
+          id: uuid(),
           timestamp: new Date(),
           type: "presence_leave",
           payload: { key, leftPresences },
         })
         addLog("info", `Presence leave on "${channelName}"`, { key, leftPresences })
       })
+
+    return () => {
+      setPresenceState({})
+      setSynced(false)
+    }
   }, [channel, channelName, addLog, onEvent])
 
   const handleTrack = useCallback(async () => {
@@ -545,9 +521,9 @@ function PresenceSection({
           <Users className="size-4" />
           Presence
           {tracking && (
-            <Badge className="bg-green-600 text-white text-[10px]">
+            <StatusBadge severity="safe" pulse>
               Tracking
-            </Badge>
+            </StatusBadge>
           )}
         </CardTitle>
       </CardHeader>
@@ -595,7 +571,12 @@ function PresenceSection({
               <Label className="text-xs text-muted-foreground">
                 Current Presence State
               </Label>
-              <JsonBlock json={JSON.stringify(presenceState, null, 2)} />
+              <JsonViewer
+                json={JSON.stringify(presenceState, null, 2)}
+                className="max-h-48"
+                padding="p-2"
+                copyable
+              />
             </div>
           </>
         )}
@@ -672,13 +653,16 @@ function LiveEventStream({
                     <span className="text-[10px] font-mono text-muted-foreground">
                       {formatTimestamp(evt.timestamp)}
                     </span>
-                    <Badge
-                      className={`text-[10px] px-1.5 py-0 ${eventBadgeColor(evt.type)}`}
-                    >
+                    <StatusBadge severity={EVENT_SEVERITY[evt.type]} dot={false}>
                       {evt.type}
-                    </Badge>
+                    </StatusBadge>
                   </div>
-                  <JsonBlock json={JSON.stringify(evt.payload, null, 2)} />
+                  <JsonViewer
+                    json={JSON.stringify(evt.payload, null, 2)}
+                    className="max-h-48"
+                    padding="p-2"
+                    copyable
+                  />
                 </div>
               ))}
             </div>
@@ -747,10 +731,8 @@ export function Realtime() {
       setChannels((prev) => prev.filter((ch) => ch.name !== name))
 
       if (activeChannelName === name) {
-        setActiveChannelName((prev) => {
-          const remaining = channels.filter((ch) => ch.name !== name)
-          return remaining.length > 0 ? remaining[0].name : ""
-        })
+        const remaining = channels.filter((ch) => ch.name !== name)
+        setActiveChannelName(remaining.length > 0 ? remaining[0].name : "")
       }
 
       addLog("info", `Unsubscribed and removed channel "${name}"`)
@@ -782,7 +764,7 @@ export function Realtime() {
       setEvents((prev) => [
         ...prev,
         {
-          id: crypto.randomUUID(),
+          id: uuid(),
           timestamp: new Date(),
           type: "broadcast",
           payload,

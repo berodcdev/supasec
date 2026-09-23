@@ -27,8 +27,10 @@ import {
 } from "@/components/ui/select"
 import { Badge } from "@/components/ui/badge"
 import { Card, CardContent } from "@/components/ui/card"
-import { ScrollArea } from "@/components/ui/scroll-area"
 import { Separator } from "@/components/ui/separator"
+import { DataTable, type Column } from "@/components/supabase-pwn/shared/data-table"
+import { StatusBadge } from "@/components/supabase-pwn/shared/status-badge"
+import { EmptyState } from "@/components/supabase-pwn/shared/empty-state"
 
 // ---------------------------------------------------------------------------
 // Types
@@ -96,15 +98,62 @@ const BUCKET_WORDLIST = [
 ]
 
 // ---------------------------------------------------------------------------
+// File list columns
+// ---------------------------------------------------------------------------
+
+const fileColumns: Column<FileObject>[] = [
+  {
+    key: "name",
+    header: "Name",
+    cell: (f) => <span className="truncate font-mono text-xs">{f.name}</span>,
+  },
+  {
+    key: "modified",
+    header: "Last Modified",
+    cell: (f) => (
+      <span className="text-xs text-muted-foreground">
+        {formatDate(f.updated_at ?? f.created_at)}
+      </span>
+    ),
+  },
+  {
+    key: "size",
+    header: "Size",
+    align: "right",
+    cell: (f) => (
+      <span className="text-xs text-muted-foreground">
+        {f.metadata?.size != null ? formatBytes(f.metadata.size) : "-"}
+      </span>
+    ),
+  },
+]
+
+// ---------------------------------------------------------------------------
 // StorageExplorer
 // ---------------------------------------------------------------------------
 
 export function StorageExplorer() {
-  const { client, addLog } = useSupabase()
+  const { client, addLog, focusTarget } = useSupabase()
 
   // -- Bucket state ---------------------------------------------------------
   const [buckets, setBuckets] = useState<BucketInfo[]>([])
   const [selectedBucket, setSelectedBucket] = useState<string>("")
+
+  // Respond to a cross-tab focus request (a finding jumping to its bucket).
+  // setState-during-render pattern (no effect) — synchronous & lint-clean.
+  const [seenFocus, setSeenFocus] = useState(focusTarget)
+  if (focusTarget !== seenFocus) {
+    setSeenFocus(focusTarget)
+    if (focusTarget && focusTarget.kind === "storage" && focusTarget.name) {
+      const name = focusTarget.name
+      setBuckets((prev) =>
+        prev.some((b) => b.name === name)
+          ? prev
+          : [...prev, { id: name, name, public: false, created_at: "", updated_at: "" }],
+      )
+      setSelectedBucket(name)
+    }
+  }
   const [loadingBuckets, setLoadingBuckets] = useState(false)
   const [bruteforcing, setBruteforcing] = useState(false)
   const [manualBucket, setManualBucket] = useState("")
@@ -480,8 +529,8 @@ export function StorageExplorer() {
   if (!client) {
     return (
       <Card>
-        <CardContent className="py-8 text-center text-sm text-muted-foreground">
-          Connect to a Supabase project first.
+        <CardContent className="py-6">
+          <EmptyState title="Connect to a Supabase project first." />
         </CardContent>
       </Card>
     )
@@ -544,12 +593,12 @@ export function StorageExplorer() {
                     <span className="flex items-center gap-2">
                       {b.name}
                       {b.created_at && (
-                        <Badge
-                          variant={b.public ? "default" : "secondary"}
-                          className="text-[10px] px-1.5 py-0"
+                        <StatusBadge
+                          severity={b.public ? "warning" : "neutral"}
+                          dot={false}
                         >
                           {b.public ? "public" : "private"}
-                        </Badge>
+                        </StatusBadge>
                       )}
                     </span>
                   </SelectItem>
@@ -660,32 +709,12 @@ export function StorageExplorer() {
                 {files.length > 0 && (
                   <>
                     <Separator />
-                    <ScrollArea className="max-h-72">
-                      <div className="space-y-1">
-                        {/* Header */}
-                        <div className="grid grid-cols-3 gap-2 px-2 text-[11px] font-medium text-muted-foreground">
-                          <span>Name</span>
-                          <span>Last Modified</span>
-                          <span>Size</span>
-                        </div>
-                        {files.map((f, i) => (
-                          <div
-                            key={`${f.name}-${i}`}
-                            className="grid grid-cols-3 gap-2 rounded px-2 py-1 text-sm hover:bg-muted/40 font-mono"
-                          >
-                            <span className="truncate">{f.name}</span>
-                            <span className="text-xs text-muted-foreground">
-                              {formatDate(f.updated_at ?? f.created_at)}
-                            </span>
-                            <span className="text-xs text-muted-foreground">
-                              {f.metadata?.size != null
-                                ? formatBytes(f.metadata.size)
-                                : "-"}
-                            </span>
-                          </div>
-                        ))}
-                      </div>
-                    </ScrollArea>
+                    <DataTable<FileObject>
+                      className="max-h-72"
+                      rows={files}
+                      getRowKey={(f, i) => `${f.name}-${i}`}
+                      columns={fileColumns}
+                    />
                   </>
                 )}
               </CardContent>

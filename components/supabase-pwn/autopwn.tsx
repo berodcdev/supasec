@@ -1,5 +1,7 @@
 "use client"
 
+import { uuid } from "@/lib/utils"
+
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import {
   Play,
@@ -16,6 +18,7 @@ import {
   Download,
   History,
   Sparkles,
+  Trash2,
 } from "lucide-react"
 
 import {
@@ -24,9 +27,11 @@ import {
   FUNCTION_WORDLIST,
 } from "@/lib/supabase-context"
 import {
+  clearScanHistory,
   diffHasChanges,
   diffScans,
   loadLastScan,
+  loadScanHistory,
   saveScan,
   type ScanDiff,
   type ScanRecord,
@@ -45,11 +50,33 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Progress } from "@/components/ui/progress"
 import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select"
+import {
   Collapsible,
   CollapsibleContent,
   CollapsibleTrigger,
 } from "@/components/ui/collapsible"
 import { Separator } from "@/components/ui/separator"
+import {
+  StatusBadge as SeverityBadge,
+  type Severity,
+} from "@/components/supabase-pwn/shared/status-badge"
+import { EmptyState } from "@/components/supabase-pwn/shared/empty-state"
+import { ReticlePanel } from "@/components/supabase-pwn/shared/reticle-panel"
+import { DataTable } from "@/components/supabase-pwn/shared/data-table"
+import { JsonViewer } from "@/components/supabase-pwn/shared/json-viewer"
+import {
+  deriveFindings,
+  summarizeFindings,
+  type Finding,
+  type FindingSeverity,
+} from "@/lib/findings"
+import { isSensitiveColumn } from "@/lib/sensitive"
 
 // ---------------------------------------------------------------------------
 // Types
@@ -65,6 +92,14 @@ type ScanResult = {
   update?: WriteStatus
   delete?: WriteStatus
   details?: string
+  /** Exact row count when data was exposed (null = couldn't be counted). */
+  rowCount?: number | null
+  /** Number of columns in the exposed row. */
+  colCount?: number
+  /** Column names harvested from the exposed row. */
+  columns?: string[]
+  /** First exposed row — what actually leaked. */
+  sample?: unknown
 }
 
 type StorageResult = {
@@ -136,6 +171,10 @@ async function runInBatches<T>(
 // Status badge helper
 // ---------------------------------------------------------------------------
 
+// Maps a scan probe outcome to a security-SEVERITY badge (finding POV):
+//   exposed/accessible → danger, protected/denied → safe, informational → info.
+// This is the deliberate semantic fix from the redesign: "DATA EXPOSED" now
+// reads as a critical finding (red), not an attacker's success (previously green).
 function StatusBadge({
   status,
 }: {
@@ -143,44 +182,26 @@ function StatusBadge({
 }) {
   if (!status) return <span className="text-xs text-muted-foreground">-</span>
 
-  switch (status) {
-    case "allowed":
-    case "enabled":
-    case "found":
-      return (
-        <Badge className="bg-green-600/20 text-green-400 border-green-600/30 hover:bg-green-600/20">
-          {status === "allowed" ? "DATA EXPOSED" : status.toUpperCase()}
-        </Badge>
-      )
-    case "empty":
-      return (
-        <Badge className="bg-yellow-600/20 text-yellow-400 border-yellow-600/30 hover:bg-yellow-600/20">
-          200 OK (EMPTY)
-        </Badge>
-      )
-    case "denied":
-    case "disabled":
-    case "not_found":
-      return (
-        <Badge className="bg-red-600/20 text-red-400 border-red-600/30 hover:bg-red-600/20">
-          {status === "not_found" ? "NOT FOUND" : status.toUpperCase()}
-        </Badge>
-      )
-    case "error":
-      return (
-        <Badge className="bg-orange-600/20 text-orange-400 border-orange-600/30 hover:bg-orange-600/20">
-          ERROR
-        </Badge>
-      )
-    case "skipped":
-      return (
-        <Badge variant="secondary" className="opacity-60">
-          SKIPPED
-        </Badge>
-      )
-    default:
-      return <span className="text-xs text-muted-foreground">-</span>
+  const meta: Record<string, { severity: Severity; label: string }> = {
+    allowed: { severity: "critical", label: "DATA EXPOSED" },
+    enabled: { severity: "warning", label: "ENABLED" },
+    found: { severity: "info", label: "FOUND" },
+    empty: { severity: "warning", label: "200 OK (EMPTY)" },
+    denied: { severity: "safe", label: "DENIED" },
+    disabled: { severity: "safe", label: "DISABLED" },
+    not_found: { severity: "neutral", label: "NOT FOUND" },
+    error: { severity: "warning", label: "ERROR" },
+    skipped: { severity: "neutral", label: "SKIPPED" },
   }
+
+  const m = meta[status]
+  if (!m) return <span className="text-xs text-muted-foreground">-</span>
+
+  return (
+    <SeverityBadge severity={m.severity} dot={false}>
+      {m.label}
+    </SeverityBadge>
+  )
 }
 
 // ---------------------------------------------------------------------------
@@ -226,11 +247,77 @@ function ResultSection({
 }
 
 // ---------------------------------------------------------------------------
+// Scan presets (one-click configuration)
+// ---------------------------------------------------------------------------
+
+const SCAN_PRESETS: {
+  key: string
+  label: string
+  hint: string
+  config: Partial<ScanConfig>
+}[] = [
+  {
+    key: "quick",
+    label: "Quick",
+    hint: "RLS + storage, no wordlist",
+    config: {
+      databaseRls: true,
+      storageScan: true,
+      authProbing: false,
+      edgeFunctions: false,
+      writeTesting: false,
+      useBuiltinTableWordlist: false,
+      useJsHints: true,
+      concurrency: 10,
+    },
+  },
+  {
+    key: "deep",
+    label: "Deep",
+    hint: "Everything + wordlist",
+    config: {
+      databaseRls: true,
+      storageScan: true,
+      authProbing: true,
+      edgeFunctions: true,
+      writeTesting: false,
+      useBuiltinTableWordlist: true,
+      useJsHints: true,
+      concurrency: 15,
+    },
+  },
+  {
+    key: "safe",
+    label: "Safe (read-only)",
+    hint: "No auth probing, no writes",
+    config: {
+      databaseRls: true,
+      storageScan: true,
+      authProbing: false,
+      edgeFunctions: true,
+      writeTesting: false,
+      useBuiltinTableWordlist: true,
+      useJsHints: true,
+      concurrency: 10,
+    },
+  },
+]
+
+// Finding severity → StatusBadge severity (StatusBadge has no "medium"/"low").
+const FINDING_BADGE: Record<FindingSeverity, Severity> = {
+  critical: "critical",
+  high: "high",
+  medium: "warning",
+  low: "info",
+  info: "neutral",
+}
+
+// ---------------------------------------------------------------------------
 // AutoPwn Component
 // ---------------------------------------------------------------------------
 
 export function AutoPwn() {
-  const { client, schema, addLog, projectUrl, apiKey, keyType, hints, mergeHints } = useSupabase()
+  const { client, schema, addLog, projectUrl, apiKey, keyType, hints, mergeHints, scanSignal, focusOn } = useSupabase()
 
   // -- Config state ---------------------------------------------------------
   const [config, setConfig] = useState<ScanConfig>({
@@ -249,6 +336,7 @@ export function AutoPwn() {
   const [previousScan, setPreviousScan] = useState<ScanRecord | null>(null)
   const [latestScan, setLatestScan] = useState<ScanRecord | null>(null)
   const [diff, setDiff] = useState<ScanDiff | null>(null)
+  const [history, setHistory] = useState<ScanRecord[]>([])
 
   // Load the most recent persisted scan when the connected project changes
   useEffect(() => {
@@ -256,11 +344,13 @@ export function AutoPwn() {
       setPreviousScan(null)
       setLatestScan(null)
       setDiff(null)
+      setHistory([])
       return
     }
     setPreviousScan(loadLastScan(projectUrl))
     setLatestScan(null)
     setDiff(null)
+    setHistory(loadScanHistory(projectUrl))
   }, [projectUrl])
 
   // -- Scan state -----------------------------------------------------------
@@ -420,10 +510,34 @@ export function AutoPwn() {
           }
           result.details = `SELECT: ${error.message}`
         } else {
-          const rowCount = Array.isArray(data) ? data.length : 0
-          if (rowCount > 0) {
+          const rowsReturned = Array.isArray(data) ? data.length : 0
+          if (rowsReturned > 0) {
             result.select = "allowed"
-            result.details = `SELECT returned ${rowCount} row(s) — DATA EXPOSED`
+            const first = (data as unknown[])[0]
+            const columns =
+              first && typeof first === "object"
+                ? Object.keys(first as Record<string, unknown>)
+                : []
+            result.columns = columns
+            result.colCount = columns.length
+            result.sample = first
+
+            // Best-effort exact row count (cheap HEAD request) — only for the
+            // few tables that actually expose data, so scan timing is unaffected.
+            let exact: number | null = null
+            try {
+              // eslint-disable-next-line @typescript-eslint/no-explicit-any
+              const { count } = await (client as any)
+                .from(table)
+                .select("*", { count: "exact", head: true })
+              exact = typeof count === "number" ? count : null
+            } catch {
+              exact = null
+            }
+            result.rowCount = exact
+            result.details = `DATA EXPOSED — ${
+              exact != null ? `${exact} row(s)` : "readable"
+            }, ${columns.length} column(s)`
           } else {
             result.select = "empty"
             result.details = `SELECT returned 200 OK but 0 rows (empty table or RLS filtering)`
@@ -653,7 +767,7 @@ export function AutoPwn() {
     // Test signup
     setCurrentItem("Testing open signup...")
     try {
-      const probeEmail = `supabase-pwn-${crypto.randomUUID().slice(0, 8)}@iapapi.com`
+      const probeEmail = `supabase-pwn-${uuid().slice(0, 8)}@iapapi.com`
       const { data, error } = await client.auth.signUp({
         email: probeEmail,
         password: "SupabasePwnProbe123!",
@@ -923,6 +1037,22 @@ export function AutoPwn() {
     runEdgeFunctionDiscovery,
   ])
 
+  // Auto-start when another component asks for a scan (auto-scan on connect /
+  // the "Run scan" button). We de-dupe on the signal value so it fires once.
+  const lastSignalRef = useRef(0)
+  useEffect(() => {
+    if (
+      scanSignal > 0 &&
+      scanSignal !== lastSignalRef.current &&
+      client &&
+      schema &&
+      !scanning
+    ) {
+      lastSignalRef.current = scanSignal
+      handleStartScan()
+    }
+  }, [scanSignal, client, schema, scanning, handleStartScan])
+
   // After a successful scan, persist + diff against the prior run
   useEffect(() => {
     if (phase !== "complete" || scanning || !projectUrl) return
@@ -940,6 +1070,25 @@ export function AutoPwn() {
     saveScan(record)
     setLatestScan(record)
     setDiff(diffScans(previousScan, record))
+    setHistory(loadScanHistory(projectUrl))
+
+    // Point the confirmed vulnerabilities straight into the log so they stand
+    // out from the progress chatter.
+    const runFindings = deriveFindings(record)
+    const c = summarizeFindings(runFindings)
+    addLog(
+      c.critical > 0 || c.high > 0 ? "warning" : "success",
+      `AutoPwn findings: ${c.critical} critical · ${c.high} high · ${c.medium} medium · ${c.low} low`,
+    )
+    for (const f of runFindings) {
+      if (f.severity === "critical" || f.severity === "high") {
+        addLog(
+          f.severity === "critical" ? "error" : "warning",
+          `VULN [${f.severity.toUpperCase()}] ${f.title}`,
+          { evidence: f.evidence, remediation: f.remediation },
+        )
+      }
+    }
   }, [
     phase,
     scanning,
@@ -951,6 +1100,7 @@ export function AutoPwn() {
     functionResults,
     previousScan,
     latestScan,
+    addLog,
   ])
 
   // Export helpers --------------------------------------------------------
@@ -978,6 +1128,23 @@ export function AutoPwn() {
     functionResults,
   ])
 
+  // Prioritized findings derived from the completed scan.
+  const findings = useMemo<Finding[]>(
+    () => (exportableScan ? deriveFindings(exportableScan) : []),
+    [exportableScan],
+  )
+  const findingCounts = useMemo(() => summarizeFindings(findings), [findings])
+
+  // New vs resolved findings compared to the previously persisted scan.
+  const findingDelta = useMemo(() => {
+    if (!latestScan || !previousScan) return null
+    const prev = new Map(deriveFindings(previousScan).map((f) => [f.id, f]))
+    const curr = new Map(deriveFindings(latestScan).map((f) => [f.id, f]))
+    const added = [...curr.values()].filter((f) => !prev.has(f.id))
+    const resolved = [...prev.values()].filter((f) => !curr.has(f.id))
+    return { added, resolved }
+  }, [latestScan, previousScan])
+
   const handleExportMarkdown = useCallback(() => {
     if (!exportableScan) return
     const md = formatMarkdownReport(exportableScan)
@@ -986,7 +1153,11 @@ export function AutoPwn() {
 
   const handleExportJson = useCallback(() => {
     if (!exportableScan) return
-    const json = JSON.stringify(exportableScan, null, 2)
+    const json = JSON.stringify(
+      { ...exportableScan, findings: deriveFindings(exportableScan) },
+      null,
+      2,
+    )
     downloadFile(
       `${reportFilenameBase(exportableScan)}.json`,
       json,
@@ -998,6 +1169,33 @@ export function AutoPwn() {
     abortRef.current.aborted = true
     addLog("warning", "Aborting scan...")
   }, [addLog])
+
+  // Load a persisted scan into the results view (read-only browse of history).
+  const handleViewScan = useCallback(
+    (rec: ScanRecord, older: ScanRecord | null) => {
+      setDbResults(rec.db)
+      setStorageResults(rec.storage)
+      setAuthResults(rec.auth)
+      setFunctionResults(rec.functions)
+      setPreviousScan(older)
+      setLatestScan(rec)
+      setDiff(older ? diffScans(older, rec) : null)
+      setPhase("complete")
+      setProgress(100)
+      setProgressLabel("Viewing saved scan")
+      setCurrentItem("")
+    },
+    [],
+  )
+
+  const handleClearHistory = useCallback(() => {
+    if (!projectUrl) return
+    clearScanHistory(projectUrl)
+    setHistory([])
+    setPreviousScan(null)
+    setDiff(null)
+    addLog("info", "Cleared saved scans (and stored samples) for this project")
+  }, [projectUrl, addLog])
 
   // =========================================================================
   // Summary computation
@@ -1024,8 +1222,11 @@ export function AutoPwn() {
   if (!client || !schema) {
     return (
       <Card>
-        <CardContent className="py-8 text-center text-sm text-muted-foreground">
-          Connect to a Supabase project to run the AutoPwn scanner.
+        <CardContent>
+          <EmptyState
+            icon={ShieldAlert}
+            title="Connect to a Supabase project to run the AutoPwn scanner."
+          />
         </CardContent>
       </Card>
     )
@@ -1076,24 +1277,24 @@ export function AutoPwn() {
         <div
           className={
             keyBanner.tone === "danger"
-              ? "rounded-md border border-red-600/30 bg-red-600/5 p-3"
-              : "rounded-md border border-blue-600/30 bg-blue-600/5 p-3"
+              ? "rounded-md border border-danger/30 bg-danger/5 p-3"
+              : "rounded-md border border-info/30 bg-info/5 p-3"
           }
         >
           <div className="flex gap-2 items-start">
             <ShieldAlert
               className={
                 keyBanner.tone === "danger"
-                  ? "size-4 text-red-400 mt-0.5 shrink-0"
-                  : "size-4 text-blue-400 mt-0.5 shrink-0"
+                  ? "size-4 text-danger mt-0.5 shrink-0"
+                  : "size-4 text-info mt-0.5 shrink-0"
               }
             />
             <div className="text-xs">
               <div
                 className={
                   keyBanner.tone === "danger"
-                    ? "font-medium text-red-300"
-                    : "font-medium text-blue-300"
+                    ? "font-medium text-danger"
+                    : "font-medium text-info"
                 }
               >
                 {keyBanner.title}
@@ -1115,6 +1316,70 @@ export function AutoPwn() {
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-5">
+          {/* Presets */}
+          <div className="space-y-1.5">
+            <Label className="text-xs text-muted-foreground">Presets</Label>
+            <div className="flex flex-wrap gap-2">
+              {SCAN_PRESETS.map((p) => (
+                <Button
+                  key={p.key}
+                  variant="outline"
+                  size="sm"
+                  disabled={scanning}
+                  title={p.hint}
+                  onClick={() =>
+                    setConfig((prev) => ({ ...prev, ...p.config }))
+                  }
+                >
+                  {p.label}
+                </Button>
+              ))}
+            </div>
+          </div>
+
+          {history.length > 0 && (
+            <div className="space-y-1.5">
+              <Label className="text-xs text-muted-foreground">
+                Saved scans
+              </Label>
+              <div className="flex items-center gap-2">
+                <Select
+                  onValueChange={(v) => {
+                    const idx = history.findIndex((h) => h.timestamp === v)
+                    if (idx >= 0)
+                      handleViewScan(history[idx], history[idx + 1] ?? null)
+                  }}
+                >
+                  <SelectTrigger className="h-8 flex-1">
+                    <SelectValue
+                      placeholder={`${history.length} saved — view a past scan`}
+                    />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {history.map((h) => (
+                      <SelectItem key={h.timestamp} value={h.timestamp}>
+                        {new Date(h.timestamp).toLocaleString()} ·{" "}
+                        {h.db.filter((r) => r.select === "allowed").length} exposed
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handleClearHistory}
+                  disabled={scanning}
+                  title="Delete saved scans (also wipes stored PII samples)"
+                >
+                  <Trash2 className="size-3.5" />
+                  Clear
+                </Button>
+              </div>
+            </div>
+          )}
+
+          <Separator />
+
           {/* Phase toggles */}
           <div className="grid gap-4 sm:grid-cols-2">
             <div className="flex items-center justify-between rounded-md border px-3 py-2">
@@ -1207,9 +1472,9 @@ export function AutoPwn() {
 
           {/* Write testing toggle */}
           <div className="space-y-2">
-            <div className="flex items-center justify-between rounded-md border border-yellow-600/30 bg-yellow-600/5 px-3 py-2">
+            <div className="flex items-center justify-between rounded-md border border-warning/30 bg-warning/5 px-3 py-2">
               <div className="flex items-center gap-2">
-                <ShieldAlert className="size-4 text-yellow-500" />
+                <ShieldAlert className="size-4 text-warning" />
                 <Label htmlFor="toggle-write" className="cursor-pointer">
                   Write Testing
                 </Label>
@@ -1222,7 +1487,7 @@ export function AutoPwn() {
               />
             </div>
             {config.writeTesting && (
-              <p className="text-xs text-yellow-400 px-1">
+              <p className="text-xs text-warning px-1">
                 Enables INSERT/UPDATE/DELETE tests. This will attempt to write
                 probe data to tables.
               </p>
@@ -1317,20 +1582,22 @@ export function AutoPwn() {
       {/* Progress                                                            */}
       {/* ------------------------------------------------------------------- */}
       {(scanning || phase !== "idle") && (
-        <Card>
-          <CardContent className="pt-6 space-y-3">
-            <div className="flex items-center justify-between text-sm">
-              <span className="font-medium">{progressLabel}</span>
-              <span className="text-muted-foreground">{progress}%</span>
-            </div>
-            <Progress value={progress} />
-            {currentItem && (
-              <p className="text-xs text-muted-foreground truncate">
-                {currentItem}
-              </p>
-            )}
-          </CardContent>
-        </Card>
+        <ReticlePanel active={scanning} label={scanning ? "SCAN:RUN" : "SCAN:IDLE"}>
+          <Card>
+            <CardContent className="pt-6 space-y-3">
+              <div className="flex items-center justify-between text-sm">
+                <span className="font-medium">{progressLabel}</span>
+                <span className="font-mono tabular-nums text-muted-foreground">{progress}%</span>
+              </div>
+              <Progress value={progress} active={scanning} />
+              {currentItem && (
+                <p className="text-xs text-muted-foreground truncate">
+                  {currentItem}
+                </p>
+              )}
+            </CardContent>
+          </Card>
+        </ReticlePanel>
       )}
 
       {/* ------------------------------------------------------------------- */}
@@ -1372,73 +1639,166 @@ export function AutoPwn() {
             <div className="flex flex-wrap gap-2">
               {dbResults.length > 0 && (
                 <>
-                  <Badge
-                    className={
-                      summary.tablesReadable > 0
-                        ? "bg-red-600/20 text-red-400 border-red-600/30 hover:bg-red-600/20"
-                        : "bg-green-600/20 text-green-400 border-green-600/30 hover:bg-green-600/20"
-                    }
+                  <SeverityBadge
+                    severity={summary.tablesReadable > 0 ? "critical" : "safe"}
                   >
                     {summary.tablesReadable}/{summary.totalTables} tables expose data
-                  </Badge>
+                  </SeverityBadge>
                   {summary.tablesEmpty > 0 && (
-                    <Badge className="bg-yellow-600/20 text-yellow-400 border-yellow-600/30 hover:bg-yellow-600/20">
+                    <SeverityBadge severity="warning">
                       {summary.tablesEmpty} return 200 OK (empty)
-                    </Badge>
+                    </SeverityBadge>
                   )}
                   {config.writeTesting && (
-                    <Badge
-                      className={
-                        summary.tablesWritable > 0
-                          ? "bg-red-600/20 text-red-400 border-red-600/30 hover:bg-red-600/20"
-                          : "bg-green-600/20 text-green-400 border-green-600/30 hover:bg-green-600/20"
-                      }
+                    <SeverityBadge
+                      severity={summary.tablesWritable > 0 ? "critical" : "safe"}
                     >
                       {summary.tablesWritable}/{summary.totalTables} tables writable
-                    </Badge>
+                    </SeverityBadge>
                   )}
                 </>
               )}
 
               {storageResults.length > 0 && (
                 <>
-                  <Badge variant="secondary">
+                  <SeverityBadge severity="neutral">
                     {summary.bucketsFound} bucket(s) found
-                  </Badge>
+                  </SeverityBadge>
                   {summary.bucketsPublic > 0 && (
-                    <Badge className="bg-yellow-600/20 text-yellow-400 border-yellow-600/30 hover:bg-yellow-600/20">
+                    <SeverityBadge severity="warning">
                       {summary.bucketsPublic} public bucket(s)
-                    </Badge>
+                    </SeverityBadge>
                   )}
                   {summary.bucketsListable > 0 && (
-                    <Badge className="bg-yellow-600/20 text-yellow-400 border-yellow-600/30 hover:bg-yellow-600/20">
+                    <SeverityBadge severity="warning">
                       {summary.bucketsListable} listable bucket(s)
-                    </Badge>
+                    </SeverityBadge>
                   )}
                 </>
               )}
 
               {authResults.length > 0 && (
-                <Badge
-                  className={
-                    summary.authEnabled > 0
-                      ? "bg-yellow-600/20 text-yellow-400 border-yellow-600/30 hover:bg-yellow-600/20"
-                      : "bg-green-600/20 text-green-400 border-green-600/30 hover:bg-green-600/20"
-                  }
+                <SeverityBadge
+                  severity={summary.authEnabled > 0 ? "warning" : "safe"}
                 >
                   {summary.authEnabled}/{summary.authTotal} auth features open
-                </Badge>
+                </SeverityBadge>
               )}
 
               {functionResults.length > 0 && (
-                <Badge variant="secondary">
+                <SeverityBadge severity="info">
                   {summary.functionsFound}/{summary.functionsTotal} functions found
-                </Badge>
+                </SeverityBadge>
               )}
             </div>
           </CardContent>
         </Card>
       )}
+
+      {/* ------------------------------------------------------------------- */}
+      {/* Vulnerabilities (prioritized findings)                              */}
+      {/* ------------------------------------------------------------------- */}
+      {phase === "complete" && findings.length > 0 && (
+        <Card className={findingCounts.critical > 0 ? "border-danger/50" : undefined}>
+          <CardHeader className="pb-3">
+            <CardTitle className="flex flex-wrap items-center justify-between gap-2 text-base">
+              <span className="flex items-center gap-2">
+                <ShieldAlert className="size-4" />
+                Vulnerabilities
+              </span>
+              <span className="flex flex-wrap gap-1.5">
+                {(
+                  ["critical", "high", "medium", "low", "info"] as FindingSeverity[]
+                )
+                  .filter((s) => findingCounts[s] > 0)
+                  .map((s) => (
+                    <SeverityBadge key={s} severity={FINDING_BADGE[s]} dot={false}>
+                      {findingCounts[s]} {s}
+                    </SeverityBadge>
+                  ))}
+              </span>
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-2">
+            {findings.map((f) => {
+              const navigable =
+                (f.category === "database" || f.category === "storage") &&
+                !!f.target
+              return (
+              <div
+                key={f.id}
+                onClick={
+                  navigable
+                    ? () => focusOn(f.category, f.target as string)
+                    : undefined
+                }
+                title={navigable ? "Open in its tab" : undefined}
+                className={`space-y-1.5 rounded-sm border border-border p-3 ${
+                  navigable
+                    ? "cursor-pointer transition-colors hover:border-primary/50 hover:bg-muted/30"
+                    : ""
+                }`}
+              >
+                <div className="flex items-start gap-2">
+                  <SeverityBadge
+                    severity={FINDING_BADGE[f.severity]}
+                    dot={false}
+                    className="mt-0.5 shrink-0"
+                  >
+                    {f.severity}
+                  </SeverityBadge>
+                  <span className="text-sm font-medium">{f.title}</span>
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  <span className="text-foreground/70">Evidence:</span>{" "}
+                  {f.evidence}
+                </p>
+                <p className="text-xs text-muted-foreground">
+                  <span className="text-foreground/70">Fix:</span>{" "}
+                  {f.remediation}
+                </p>
+              </div>
+              )
+            })}
+          </CardContent>
+        </Card>
+      )}
+
+      {/* ------------------------------------------------------------------- */}
+      {/* Findings delta vs previous scan                                     */}
+      {/* ------------------------------------------------------------------- */}
+      {phase === "complete" &&
+        findingDelta &&
+        (findingDelta.added.length > 0 || findingDelta.resolved.length > 0) && (
+          <Card>
+            <CardHeader className="pb-3">
+              <CardTitle className="flex items-center gap-2 text-base">
+                <History className="size-4" />
+                Findings changes
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-2">
+              {findingDelta.added.map((f) => (
+                <div key={`add-${f.id}`} className="flex items-start gap-2">
+                  <SeverityBadge severity="critical" dot={false} className="mt-0.5 shrink-0">
+                    new
+                  </SeverityBadge>
+                  <span className="text-sm">{f.title}</span>
+                </div>
+              ))}
+              {findingDelta.resolved.map((f) => (
+                <div key={`res-${f.id}`} className="flex items-start gap-2">
+                  <SeverityBadge severity="safe" dot={false} className="mt-0.5 shrink-0">
+                    fixed
+                  </SeverityBadge>
+                  <span className="text-sm text-muted-foreground line-through">
+                    {f.title}
+                  </span>
+                </div>
+              ))}
+            </CardContent>
+          </Card>
+        )}
 
       {/* ------------------------------------------------------------------- */}
       {/* Diff vs previous scan                                               */}
@@ -1454,9 +1814,9 @@ export function AutoPwn() {
           <CardContent className="space-y-2 text-sm">
             {diff.newReadable.length > 0 && (
               <div>
-                <Badge className="bg-red-600/20 text-red-400 border-red-600/30 mr-2">
+                <SeverityBadge severity="critical" className="mr-2">
                   +{diff.newReadable.length} newly readable
-                </Badge>
+                </SeverityBadge>
                 <span className="text-xs text-muted-foreground font-mono">
                   {diff.newReadable.join(", ")}
                 </span>
@@ -1464,9 +1824,9 @@ export function AutoPwn() {
             )}
             {diff.noLongerReadable.length > 0 && (
               <div>
-                <Badge className="bg-green-600/20 text-green-400 border-green-600/30 mr-2">
+                <SeverityBadge severity="safe" className="mr-2">
                   -{diff.noLongerReadable.length} fixed (no longer readable)
-                </Badge>
+                </SeverityBadge>
                 <span className="text-xs text-muted-foreground font-mono">
                   {diff.noLongerReadable.join(", ")}
                 </span>
@@ -1474,9 +1834,9 @@ export function AutoPwn() {
             )}
             {diff.newWritable.length > 0 && (
               <div>
-                <Badge className="bg-red-600/20 text-red-400 border-red-600/30 mr-2">
+                <SeverityBadge severity="critical" className="mr-2">
                   +{diff.newWritable.length} newly writable
-                </Badge>
+                </SeverityBadge>
                 <span className="text-xs text-muted-foreground font-mono">
                   {diff.newWritable.join(", ")}
                 </span>
@@ -1484,9 +1844,9 @@ export function AutoPwn() {
             )}
             {diff.noLongerWritable.length > 0 && (
               <div>
-                <Badge className="bg-green-600/20 text-green-400 border-green-600/30 mr-2">
+                <SeverityBadge severity="safe" className="mr-2">
                   -{diff.noLongerWritable.length} fixed (no longer writable)
-                </Badge>
+                </SeverityBadge>
                 <span className="text-xs text-muted-foreground font-mono">
                   {diff.noLongerWritable.join(", ")}
                 </span>
@@ -1494,9 +1854,9 @@ export function AutoPwn() {
             )}
             {diff.newPublicBuckets.length > 0 && (
               <div>
-                <Badge className="bg-yellow-600/20 text-yellow-400 border-yellow-600/30 mr-2">
+                <SeverityBadge severity="warning" className="mr-2">
                   +{diff.newPublicBuckets.length} new public bucket(s)
-                </Badge>
+                </SeverityBadge>
                 <span className="text-xs text-muted-foreground font-mono">
                   {diff.newPublicBuckets.join(", ")}
                 </span>
@@ -1504,9 +1864,9 @@ export function AutoPwn() {
             )}
             {diff.newListableBuckets.length > 0 && (
               <div>
-                <Badge className="bg-yellow-600/20 text-yellow-400 border-yellow-600/30 mr-2">
+                <SeverityBadge severity="warning" className="mr-2">
                   +{diff.newListableBuckets.length} new listable bucket(s)
-                </Badge>
+                </SeverityBadge>
                 <span className="text-xs text-muted-foreground font-mono">
                   {diff.newListableBuckets.join(", ")}
                 </span>
@@ -1514,9 +1874,9 @@ export function AutoPwn() {
             )}
             {diff.newAuthEnabled.length > 0 && (
               <div>
-                <Badge className="bg-yellow-600/20 text-yellow-400 border-yellow-600/30 mr-2">
+                <SeverityBadge severity="warning" className="mr-2">
                   +{diff.newAuthEnabled.length} auth feature(s) opened
-                </Badge>
+                </SeverityBadge>
                 <span className="text-xs text-muted-foreground font-mono">
                   {diff.newAuthEnabled.join(", ")}
                 </span>
@@ -1524,9 +1884,9 @@ export function AutoPwn() {
             )}
             {diff.newFunctions.length > 0 && (
               <div>
-                <Badge variant="secondary" className="mr-2">
+                <SeverityBadge severity="info" className="mr-2">
                   +{diff.newFunctions.length} new function(s)
-                </Badge>
+                </SeverityBadge>
                 <span className="text-xs text-muted-foreground font-mono">
                   {diff.newFunctions.join(", ")}
                 </span>
@@ -1573,19 +1933,19 @@ export function AutoPwn() {
               >
                 <div className="grid grid-cols-3 gap-4 pt-2 text-sm">
                   <div className="text-center">
-                    <div className="text-2xl font-bold">
+                    <div className="font-mono text-2xl font-bold tabular-nums text-primary">
                       {schema?.tables.length ?? 0}
                     </div>
                     <div className="text-xs text-muted-foreground">Tables</div>
                   </div>
                   <div className="text-center">
-                    <div className="text-2xl font-bold">
+                    <div className="font-mono text-2xl font-bold tabular-nums text-primary">
                       {schema?.views.length ?? 0}
                     </div>
                     <div className="text-xs text-muted-foreground">Views</div>
                   </div>
                   <div className="text-center">
-                    <div className="text-2xl font-bold">
+                    <div className="font-mono text-2xl font-bold tabular-nums text-primary">
                       {schema?.functions.length ?? 0}
                     </div>
                     <div className="text-xs text-muted-foreground">Functions</div>
@@ -1604,53 +1964,95 @@ export function AutoPwn() {
                     icon={Database}
                     count={dbResults.length}
                   >
-                    <div className="overflow-x-auto">
-                      <table className="w-full text-sm table-fixed">
-                        <thead>
-                          <tr className="border-b text-xs text-muted-foreground">
-                            <th className="py-2 pr-2 text-left font-medium w-[36%]">
-                              Table
-                            </th>
-                            <th className="py-2 px-1 text-center font-medium w-[16%]">
-                              SELECT
-                            </th>
-                            <th className="py-2 px-1 text-center font-medium w-[16%]">
-                              INSERT
-                            </th>
-                            <th className="py-2 px-1 text-center font-medium w-[16%]">
-                              UPDATE
-                            </th>
-                            <th className="py-2 px-1 text-center font-medium w-[16%]">
-                              DELETE
-                            </th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {dbResults.map((r) => (
-                            <tr
-                              key={r.name}
-                              className="border-b border-border/50"
-                            >
-                              <td className="py-2 pr-2 font-mono text-xs truncate" title={r.name}>
+                    <DataTable<ScanResult>
+                      columns={[
+                        {
+                          key: "name",
+                          header: "Table",
+                          align: "left",
+                          className: "font-mono text-xs",
+                          cell: (r) => (
+                            <div className="min-w-0">
+                              <span className="block truncate" title={r.name}>
                                 {r.name}
-                              </td>
-                              <td className="py-2 px-2 text-center">
-                                <StatusBadge status={r.select} />
-                              </td>
-                              <td className="py-2 px-2 text-center">
-                                <StatusBadge status={r.insert} />
-                              </td>
-                              <td className="py-2 px-2 text-center">
-                                <StatusBadge status={r.update} />
-                              </td>
-                              <td className="py-2 px-2 text-center">
-                                <StatusBadge status={r.delete} />
-                              </td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    </div>
+                              </span>
+                              {r.select === "allowed" &&
+                                r.colCount != null && (
+                                  <span className="block text-[10px] font-normal text-danger">
+                                    {r.rowCount != null
+                                      ? `${r.rowCount.toLocaleString()} rows`
+                                      : "readable"}{" "}
+                                    · {r.colCount} cols exposed
+                                  </span>
+                                )}
+                            </div>
+                          ),
+                        },
+                        {
+                          key: "select",
+                          header: "SELECT",
+                          align: "center",
+                          cell: (r) => <StatusBadge status={r.select} />,
+                        },
+                        {
+                          key: "insert",
+                          header: "INSERT",
+                          align: "center",
+                          cell: (r) => <StatusBadge status={r.insert} />,
+                        },
+                        {
+                          key: "update",
+                          header: "UPDATE",
+                          align: "center",
+                          cell: (r) => <StatusBadge status={r.update} />,
+                        },
+                        {
+                          key: "delete",
+                          header: "DELETE",
+                          align: "center",
+                          cell: (r) => <StatusBadge status={r.delete} />,
+                        },
+                      ]}
+                      rows={dbResults}
+                      getRowKey={(r) => r.name}
+                      renderExpanded={(r) =>
+                        r.select === "allowed" && r.sample !== undefined ? (
+                          <div className="space-y-2">
+                            {r.columns && r.columns.length > 0 && (
+                              <div className="flex flex-wrap gap-1">
+                                {r.columns.map((c) => (
+                                  <Badge
+                                    key={c}
+                                    variant={
+                                      isSensitiveColumn(c) ? "critical" : "neutral"
+                                    }
+                                    className="font-mono text-[10px]"
+                                    title={
+                                      isSensitiveColumn(c)
+                                        ? "Sensitive / PII column"
+                                        : undefined
+                                    }
+                                  >
+                                    {c}
+                                  </Badge>
+                                ))}
+                              </div>
+                            )}
+                            <div>
+                              <p className="mb-1 font-mono text-[10px] uppercase tracking-widest text-muted-foreground">
+                                Exposed sample row
+                              </p>
+                              <JsonViewer
+                                data={r.sample}
+                                className="max-h-72"
+                                padding="p-2"
+                                copyable
+                              />
+                            </div>
+                          </div>
+                        ) : null
+                      }
+                    />
                   </ResultSection>
                 </>
               )}
@@ -1666,55 +2068,50 @@ export function AutoPwn() {
                     icon={HardDrive}
                     count={storageResults.length}
                   >
-                    <div className="overflow-x-auto">
-                      <table className="w-full text-sm table-fixed">
-                        <thead>
-                          <tr className="border-b text-xs text-muted-foreground">
-                            <th className="py-2 pr-2 text-left font-medium w-[34%]">
-                              Bucket
-                            </th>
-                            <th className="py-2 px-1 text-center font-medium w-[22%]">
-                              Public
-                            </th>
-                            <th className="py-2 px-1 text-center font-medium w-[22%]">
-                              Listable
-                            </th>
-                            <th className="py-2 px-1 text-center font-medium w-[22%]">
-                              Files Found
-                            </th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {storageResults.map((r) => (
-                            <tr
-                              key={r.name}
-                              className="border-b border-border/50"
+                    <DataTable<StorageResult>
+                      columns={[
+                        {
+                          key: "name",
+                          header: "Bucket",
+                          align: "left",
+                          className: "font-mono text-xs",
+                          cell: (r) => (
+                            <span className="block truncate" title={r.name}>
+                              {r.name}
+                            </span>
+                          ),
+                        },
+                        {
+                          key: "public",
+                          header: "Public",
+                          align: "center",
+                          cell: (r) => (
+                            <SeverityBadge
+                              severity={r.public ? "warning" : "safe"}
+                              dot={false}
                             >
-                              <td className="py-2 pr-2 font-mono text-xs truncate" title={r.name}>
-                                {r.name}
-                              </td>
-                              <td className="py-2 px-2 text-center">
-                                <Badge
-                                  className={
-                                    r.public
-                                      ? "bg-yellow-600/20 text-yellow-400 border-yellow-600/30 hover:bg-yellow-600/20"
-                                      : "bg-green-600/20 text-green-400 border-green-600/30 hover:bg-green-600/20"
-                                  }
-                                >
-                                  {r.public ? "YES" : "NO"}
-                                </Badge>
-                              </td>
-                              <td className="py-2 px-2 text-center">
-                                <StatusBadge status={r.listable} />
-                              </td>
-                              <td className="py-2 px-2 text-center text-xs text-muted-foreground">
-                                {r.fileCount !== undefined ? r.fileCount : "-"}
-                              </td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    </div>
+                              {r.public ? "YES" : "NO"}
+                            </SeverityBadge>
+                          ),
+                        },
+                        {
+                          key: "listable",
+                          header: "Listable",
+                          align: "center",
+                          cell: (r) => <StatusBadge status={r.listable} />,
+                        },
+                        {
+                          key: "files",
+                          header: "Files Found",
+                          align: "right",
+                          className: "text-xs text-muted-foreground",
+                          cell: (r) =>
+                            r.fileCount !== undefined ? r.fileCount : "-",
+                        },
+                      ]}
+                      rows={storageResults}
+                      getRowKey={(r) => r.name}
+                    />
                   </ResultSection>
                 </>
               )}
@@ -1730,43 +2127,36 @@ export function AutoPwn() {
                     icon={Key}
                     count={authResults.length}
                   >
-                    <div className="overflow-x-auto">
-                      <table className="w-full text-sm table-fixed">
-                        <thead>
-                          <tr className="border-b text-xs text-muted-foreground">
-                            <th className="py-2 pr-2 text-left font-medium w-[25%]">
-                              Feature
-                            </th>
-                            <th className="py-2 px-1 text-center font-medium w-[20%]">
-                              Status
-                            </th>
-                            <th className="py-2 px-2 text-left font-medium w-[55%]">
-                              Details
-                            </th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {authResults.map((r) => (
-                            <tr
-                              key={r.feature}
-                              className="border-b border-border/50"
-                            >
-                              <td className="py-2 pr-2 text-xs font-medium truncate">
-                                {r.feature}
-                              </td>
-                              <td className="py-2 px-1 text-center">
-                                <StatusBadge status={r.status} />
-                              </td>
-                              <td className="py-2 px-2 text-xs text-muted-foreground">
-                                <div className="truncate" title={r.details ?? "-"}>
-                                  {r.details ?? "-"}
-                                </div>
-                              </td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    </div>
+                    <DataTable<AuthResult>
+                      columns={[
+                        {
+                          key: "feature",
+                          header: "Feature",
+                          align: "left",
+                          className: "text-xs font-medium",
+                          cell: (r) => r.feature,
+                        },
+                        {
+                          key: "status",
+                          header: "Status",
+                          align: "center",
+                          cell: (r) => <StatusBadge status={r.status} />,
+                        },
+                        {
+                          key: "details",
+                          header: "Details",
+                          align: "left",
+                          className: "text-xs text-muted-foreground",
+                          cell: (r) => (
+                            <div className="truncate" title={r.details ?? "-"}>
+                              {r.details ?? "-"}
+                            </div>
+                          ),
+                        },
+                      ]}
+                      rows={authResults}
+                      getRowKey={(r) => r.feature}
+                    />
                   </ResultSection>
                 </>
               )}
@@ -1782,35 +2172,29 @@ export function AutoPwn() {
                     icon={Zap}
                     count={functionResults.filter((r) => r.status === "found").length}
                   >
-                    <div className="overflow-x-auto">
-                      <table className="w-full text-sm table-fixed">
-                        <thead>
-                          <tr className="border-b text-xs text-muted-foreground">
-                            <th className="py-2 pr-2 text-left font-medium w-[60%]">
-                              Name
-                            </th>
-                            <th className="py-2 px-1 text-center font-medium w-[40%]">
-                              Status
-                            </th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {functionResults.map((r) => (
-                            <tr
-                              key={r.name}
-                              className="border-b border-border/50"
-                            >
-                              <td className="py-2 pr-2 font-mono text-xs truncate" title={r.name}>
-                                {r.name}
-                              </td>
-                              <td className="py-2 px-2 text-center">
-                                <StatusBadge status={r.status} />
-                              </td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    </div>
+                    <DataTable<FunctionResult>
+                      columns={[
+                        {
+                          key: "name",
+                          header: "Name",
+                          align: "left",
+                          className: "font-mono text-xs",
+                          cell: (r) => (
+                            <span className="block truncate" title={r.name}>
+                              {r.name}
+                            </span>
+                          ),
+                        },
+                        {
+                          key: "status",
+                          header: "Status",
+                          align: "center",
+                          cell: (r) => <StatusBadge status={r.status} />,
+                        },
+                      ]}
+                      rows={functionResults}
+                      getRowKey={(r) => r.name}
+                    />
                   </ResultSection>
                 </>
               )}
