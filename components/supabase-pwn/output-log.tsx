@@ -9,6 +9,8 @@ import React, {
 } from "react"
 import {
   ArrowUpDown,
+  Check,
+  Copy,
   Maximize2,
   Minimize2,
   Search,
@@ -146,6 +148,7 @@ export function OutputLog() {
   const [query, setQuery] = useState("")
   const [muted, setMuted] = useState<Set<LogType>>(() => new Set())
   const [cluesOnly, setCluesOnly] = useState(false)
+  const [copiedClues, setCopiedClues] = useState(false)
   const bottomRef = useRef<HTMLDivElement>(null)
   const scrollContainerRef = useRef<HTMLDivElement>(null)
 
@@ -192,6 +195,20 @@ export function OutputLog() {
       return next
     })
   }, [])
+
+  const copyClues = useCallback(async () => {
+    const text = logs
+      .filter((l) => l.message.includes("🔎"))
+      .map((l) => `${formatTimestamp(l.timestamp)} ${l.message}`)
+      .join("\n")
+    try {
+      await navigator.clipboard.writeText(text)
+      setCopiedClues(true)
+      setTimeout(() => setCopiedClues(false), 1500)
+    } catch {
+      // clipboard unavailable — ignore
+    }
+  }, [logs])
 
   // Auto-scroll to bottom on new entries (only when sorting oldest-first)
   useEffect(() => {
@@ -298,6 +315,21 @@ export function OutputLog() {
             <Maximize2 className="size-3.5" />
           )}
         </Button>
+
+        {clueCount > 0 && (
+          <Button
+            variant="ghost"
+            size="icon-xs"
+            onClick={copyClues}
+            title="Copy all clues"
+          >
+            {copiedClues ? (
+              <Check className="size-3.5 text-success" />
+            ) : (
+              <Copy className="size-3.5" />
+            )}
+          </Button>
+        )}
 
         <Button
           variant="ghost"
