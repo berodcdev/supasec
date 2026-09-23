@@ -19,8 +19,13 @@ Ideia descartada não volta a ser sugerida; o motivo fica registrado.
 - [x] **Exportar só as pistas** (P) — botão de copiar CLUE no Output Log · _feita_
 
 ## 2026-09-23 · a partir de "Arquivos no Storage + decode JWT + copiar clues"
-- [ ] **Escanear respostas de RPC/Edge/Realtime por segredos** (M) — reusa `flagSensitiveValues`/`describeJwtsInRow` nas respostas dessas telas; hoje só DB e Storage geram pistas · `edge-functions.tsx`, `realtime.tsx`, `database-explorer.tsx` (RpcTab) · _proposta_
-- [ ] **Role do JWT nos findings/export do AutoPwn** (P) — o bruteforce já mostra role/exp; incluir no findings e no relatório exportado pra consistência · `lib/findings.ts` · _proposta_
+- [x] **Escanear respostas de RPC/Edge/Realtime por segredos** (M) — `scanJsonForSecrets` nas 3 telas · _feita_
+- [x] **Role do JWT nos findings/export do AutoPwn** (P) — `describeJwtsInRow` na evidência do finding · _feita_
+
+## 2026-09-23 · outra área do produto (reporting / reprodutibilidade / discovery-UX)
+- [ ] **Copy-as-curl em cada operação** (M) — botão que gera o `curl` equivalente (SELECT/INSERT/RPC/storage/edge) com apikey+Authorization; pentester adora reproduzir fora da ferramenta e colar no report · telas de operação · _proposta_
+- [ ] **Relatório de sessão consolidado** (M) — hoje só o AutoPwn exporta; as pistas do bruteforce/RPC/edge/storage e achados manuais só vivem no log; um export único (scan + clues + manuais) fecha o ciclo · `lib/scan-report.ts` + Output Log · _proposta_
+- [ ] **Descoberta de Edge Functions na própria aba** (P) — hoje só o AutoPwn faz bruteforce de funções; a aba Edge Functions exige nome manual; reusar `FUNCTION_WORDLIST` ali dá descoberta no lugar onde se invoca · `edge-functions.tsx` · _proposta_
 
 ## ⏸️ PENDENTE (bloqueado — ação de conta, não código)
 - [ ] **Publicar imagem no GHCR** — a Action (`.github/workflows/docker.yml`) está pronta mas o **GitHub Actions está bloqueado por billing** na conta. Destravar: resolver billing (Settings → Billing) → Action publica no push → tornar o package GHCR público. Alternativa sem Actions: PAT com `write:packages` e publicar manualmente. _blocked_

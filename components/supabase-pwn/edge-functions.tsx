@@ -3,18 +3,21 @@
 import { uuid } from "@/lib/utils"
 
 import { useCallback, useState } from "react"
-import { Plus, X, Play, Zap } from "lucide-react"
+import { Plus, X, Play, Zap, Search, Loader2 } from "lucide-react"
 
-import { useSupabase } from "@/lib/supabase-context"
+import { useSupabase, FUNCTION_WORDLIST } from "@/lib/supabase-context"
 import { scanJsonForSecrets } from "@/lib/sensitive"
+import { toCurl, functionsUrl, restHeaders } from "@/lib/curl"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
+import { Badge } from "@/components/ui/badge"
 import { Card, CardContent } from "@/components/ui/card"
 import { JsonViewer } from "@/components/supabase-pwn/shared/json-viewer"
 import { SectionHeader } from "@/components/supabase-pwn/shared/section-header"
 import { EmptyState } from "@/components/supabase-pwn/shared/empty-state"
+import { CopyCurl } from "@/components/supabase-pwn/shared/copy-curl"
 
 // ---------------------------------------------------------------------------
 // Types
@@ -43,7 +46,7 @@ function createHeaderRow(): HeaderRow {
 // ---------------------------------------------------------------------------
 
 export function EdgeFunctions() {
-  const { client, addLog } = useSupabase()
+  const { client, addLog, projectUrl, apiKey } = useSupabase()
 
   // -- State ----------------------------------------------------------------
   const [functionName, setFunctionName] = useState("")
@@ -51,6 +54,8 @@ export function EdgeFunctions() {
   const [headerRows, setHeaderRows] = useState<HeaderRow[]>([])
   const [result, setResult] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
+  const [discovering, setDiscovering] = useState(false)
+  const [found, setFound] = useState<string[]>([])
 
   // -- Header row management ------------------------------------------------
 
@@ -153,6 +158,61 @@ export function EdgeFunctions() {
     }
   }, [client, functionName, bodyJson, headerRows, addLog])
 
+  // -- Discover (bruteforce function names) ---------------------------------
+
+  const handleDiscover = useCallback(async () => {
+    if (!projectUrl || !apiKey) return
+    setDiscovering(true)
+    setFound([])
+    try {
+      addLog("info", `Probing ${FUNCTION_WORDLIST.length} edge function names…`)
+      const hits: string[] = []
+      const batchSize = 10
+      for (let i = 0; i < FUNCTION_WORDLIST.length; i += batchSize) {
+        const batch = FUNCTION_WORDLIST.slice(i, i + batchSize)
+        const results = await Promise.allSettled(
+          batch.map(async (name) => {
+            try {
+              const res = await fetch(functionsUrl(projectUrl, name), {
+                method: "POST",
+                headers: { ...restHeaders(apiKey), "content-type": "application/json" },
+                body: "{}",
+              })
+              return res.status === 404 ? null : name
+            } catch {
+              return name // CORS/network usually means a deployed function exists
+            }
+          }),
+        )
+        for (const r of results) {
+          if (r.status === "fulfilled" && r.value) hits.push(r.value)
+        }
+      }
+      setFound(hits)
+      addLog(
+        hits.length > 0 ? "success" : "info",
+        `Edge function discovery: ${hits.length} found${hits.length ? ` — ${hits.join(", ")}` : ""}`,
+        hits,
+      )
+    } finally {
+      setDiscovering(false)
+    }
+  }, [projectUrl, apiKey, addLog])
+
+  // -- Build a curl for the current invoke ----------------------------------
+
+  const buildInvokeCurl = useCallback(() => {
+    const custom = Object.fromEntries(
+      headerRows.filter((r) => r.key).map((r) => [r.key, r.value]),
+    )
+    return toCurl({
+      method: "POST",
+      url: functionsUrl(projectUrl, functionName.trim() || "<function>"),
+      headers: { ...restHeaders(apiKey), "content-type": "application/json", ...custom },
+      body: bodyJson.trim() || "{}",
+    })
+  }, [projectUrl, apiKey, functionName, bodyJson, headerRows])
+
   // =========================================================================
   // Render
   // =========================================================================
@@ -176,13 +236,43 @@ export function EdgeFunctions() {
       <Card>
         <CardContent className="pt-6 space-y-4">
           <div className="space-y-1.5">
-            <Label htmlFor="fn-name">Function Name</Label>
+            <div className="flex items-center justify-between">
+              <Label htmlFor="fn-name">Function Name</Label>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleDiscover}
+                disabled={discovering}
+              >
+                {discovering ? (
+                  <Loader2 className="size-3.5 animate-spin" />
+                ) : (
+                  <Search className="size-3.5" />
+                )}
+                {discovering ? "Discovering…" : "Discover"}
+              </Button>
+            </div>
             <Input
               id="fn-name"
               placeholder="e.g. hello-world"
               value={functionName}
               onChange={(e) => setFunctionName(e.target.value)}
             />
+            {found.length > 0 && (
+              <div className="flex flex-wrap gap-1 pt-1">
+                {found.map((f) => (
+                  <Badge
+                    key={f}
+                    variant="secondary"
+                    className="cursor-pointer font-mono text-[10px]"
+                    onClick={() => setFunctionName(f)}
+                    title="Use this function"
+                  >
+                    {f}
+                  </Badge>
+                ))}
+              </div>
+            )}
           </div>
 
           {/* Request Body */}
@@ -233,18 +323,21 @@ export function EdgeFunctions() {
             </Button>
           </div>
 
-          {/* Invoke Button */}
-          <Button
-            onClick={handleInvoke}
-            disabled={loading || !functionName.trim()}
-          >
-            {loading ? (
-              <Play className="h-4 w-4 mr-1 animate-spin" />
-            ) : (
-              <Play className="h-4 w-4 mr-1" />
-            )}
-            {loading ? "Invoking..." : "Invoke"}
-          </Button>
+          {/* Invoke Button + curl */}
+          <div className="flex items-center gap-2">
+            <Button
+              onClick={handleInvoke}
+              disabled={loading || !functionName.trim()}
+            >
+              {loading ? (
+                <Play className="h-4 w-4 mr-1 animate-spin" />
+              ) : (
+                <Play className="h-4 w-4 mr-1" />
+              )}
+              {loading ? "Invoking..." : "Invoke"}
+            </Button>
+            <CopyCurl build={buildInvokeCurl} disabled={!functionName.trim()} />
+          </div>
         </CardContent>
       </Card>
 

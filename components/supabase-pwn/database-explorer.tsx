@@ -25,6 +25,8 @@ import { StatusBadge, type Severity } from "@/components/supabase-pwn/shared/sta
 import { EmptyState } from "@/components/supabase-pwn/shared/empty-state"
 import { ReticlePanel } from "@/components/supabase-pwn/shared/reticle-panel"
 import { isSensitiveColumn, sensitiveTableHint, scanJsonForSecrets } from "@/lib/sensitive"
+import { toCurl, restUrl, restHeaders, filtersToParams } from "@/lib/curl"
+import { CopyCurl } from "@/components/supabase-pwn/shared/copy-curl"
 
 
 // ---------------------------------------------------------------------------
@@ -238,7 +240,7 @@ function SelectTab({
   columns: { name: string; type: string; required: boolean }[]
   onSendToUpdate?: (row: Record<string, unknown>) => void
 }) {
-  const { client, addLog } = useSupabase()
+  const { client, addLog, projectUrl, apiKey, session } = useSupabase()
   const { filters, addFilter, removeFilter, changeFilter } = useFilterState()
 
   const [selectColumns, setSelectColumns] = useState("*")
@@ -366,10 +368,27 @@ function SelectTab({
       </div>
 
       {/* Execute */}
-      <Button onClick={handleExecute} disabled={loading}>
-        <Play className="h-4 w-4 mr-1" />
-        {loading ? "Executing..." : "Execute"}
-      </Button>
+      <div className="flex items-center gap-2">
+        <Button onClick={handleExecute} disabled={loading}>
+          <Play className="h-4 w-4 mr-1" />
+          {loading ? "Executing..." : "Execute"}
+        </Button>
+        <CopyCurl
+          build={() => {
+            const params: Record<string, string> = {
+              select: selectColumns || "*",
+              ...filtersToParams(filters),
+            }
+            if (orderByColumn) params.order = `${orderByColumn}.${ascending ? "asc" : "desc"}`
+            params.limit = String(Math.min(Math.max(1, limit), 10000))
+            return toCurl({
+              method: "GET",
+              url: restUrl(projectUrl, table, params),
+              headers: restHeaders(apiKey, session?.access_token),
+            })
+          }}
+        />
+      </div>
 
       {/* Results */}
       {result !== null && (
@@ -430,7 +449,7 @@ function InsertTab({
   table: string
   columns: { name: string; type: string; required: boolean }[]
 }) {
-  const { client, addLog } = useSupabase()
+  const { client, addLog, projectUrl, apiKey, session } = useSupabase()
   const [jsonData, setJsonData] = useState("")
   const [result, setResult] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
@@ -506,10 +525,26 @@ function InsertTab({
         />
       </div>
 
-      <Button onClick={handleInsert} disabled={loading || !jsonData.trim()}>
-        <Play className="h-4 w-4 mr-1" />
-        {loading ? "Inserting..." : "Insert"}
-      </Button>
+      <div className="flex items-center gap-2">
+        <Button onClick={handleInsert} disabled={loading || !jsonData.trim()}>
+          <Play className="h-4 w-4 mr-1" />
+          {loading ? "Inserting..." : "Insert"}
+        </Button>
+        <CopyCurl
+          disabled={!jsonData.trim()}
+          build={() =>
+            toCurl({
+              method: "POST",
+              url: restUrl(projectUrl, table),
+              headers: restHeaders(apiKey, session?.access_token, {
+                "content-type": "application/json",
+                Prefer: "return=representation",
+              }),
+              body: jsonData,
+            })
+          }
+        />
+      </div>
 
       {result !== null && (
         <Card>
@@ -674,10 +709,26 @@ function UpdateTab({
         />
       </div>
 
-      <Button onClick={handleUpdate} disabled={loading || !jsonData.trim()}>
-        <Play className="h-4 w-4 mr-1" />
-        {loading ? "Sending..." : method}
-      </Button>
+      <div className="flex items-center gap-2">
+        <Button onClick={handleUpdate} disabled={loading || !jsonData.trim()}>
+          <Play className="h-4 w-4 mr-1" />
+          {loading ? "Sending..." : method}
+        </Button>
+        <CopyCurl
+          disabled={!jsonData.trim()}
+          build={() =>
+            toCurl({
+              method,
+              url: restUrl(projectUrl, table, filtersToParams(filters)),
+              headers: restHeaders(apiKey, session?.access_token, {
+                "content-type": "application/json",
+                Prefer: "return=representation",
+              }),
+              body: jsonData,
+            })
+          }
+        />
+      </div>
 
       {result !== null && (
         <Card>
@@ -703,7 +754,7 @@ function DeleteTab({
   table: string
   columns: { name: string; type: string; required: boolean }[]
 }) {
-  const { client, addLog } = useSupabase()
+  const { client, addLog, projectUrl, apiKey, session } = useSupabase()
   const { filters, addFilter, removeFilter, changeFilter } = useFilterState()
   const [result, setResult] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
@@ -760,14 +811,25 @@ function DeleteTab({
         onChange={changeFilter}
       />
 
-      <Button
-        variant="destructive"
-        onClick={handleDelete}
-        disabled={loading}
-      >
-        <Trash2 className="h-4 w-4 mr-1" />
-        {loading ? "Deleting..." : "Delete"}
-      </Button>
+      <div className="flex items-center gap-2">
+        <Button
+          variant="destructive"
+          onClick={handleDelete}
+          disabled={loading}
+        >
+          <Trash2 className="h-4 w-4 mr-1" />
+          {loading ? "Deleting..." : "Delete"}
+        </Button>
+        <CopyCurl
+          build={() =>
+            toCurl({
+              method: "DELETE",
+              url: restUrl(projectUrl, table, filtersToParams(filters)),
+              headers: restHeaders(apiKey, session?.access_token),
+            })
+          }
+        />
+      </div>
 
       {result !== null && (
         <Card>
@@ -787,7 +849,7 @@ function DeleteTab({
 // ---------------------------------------------------------------------------
 
 function RpcTab() {
-  const { client, schema, addLog } = useSupabase()
+  const { client, schema, addLog, projectUrl, apiKey, session } = useSupabase()
   const functions = useMemo(() => schema?.functions ?? [], [schema])
 
   const [fnName, setFnName] = useState("")
@@ -928,10 +990,25 @@ function RpcTab() {
         />
       </div>
 
-      <Button onClick={handleCall} disabled={loading || !fnName}>
-        <Play className="h-4 w-4 mr-1" />
-        {loading ? "Calling..." : "Call"}
-      </Button>
+      <div className="flex items-center gap-2">
+        <Button onClick={handleCall} disabled={loading || !fnName}>
+          <Play className="h-4 w-4 mr-1" />
+          {loading ? "Calling..." : "Call"}
+        </Button>
+        <CopyCurl
+          disabled={!fnName}
+          build={() =>
+            toCurl({
+              method: "POST",
+              url: restUrl(projectUrl, `rpc/${fnName}`),
+              headers: restHeaders(apiKey, session?.access_token, {
+                "content-type": "application/json",
+              }),
+              body: args.trim() || "{}",
+            })
+          }
+        />
+      </div>
 
       {result !== null && (
         <Card>

@@ -11,6 +11,7 @@ import {
   ArrowUpDown,
   Check,
   Copy,
+  FileDown,
   Maximize2,
   Minimize2,
   Search,
@@ -20,6 +21,7 @@ import {
 
 import { cn } from "@/lib/utils"
 import { useSupabase } from "@/lib/supabase-context"
+import { downloadFile } from "@/lib/scan-report"
 import type { LogEntry } from "@/lib/supabase-context"
 import { Button } from "@/components/ui/button"
 import { ScrollArea } from "@/components/ui/scroll-area"
@@ -196,6 +198,37 @@ export function OutputLog() {
     })
   }, [])
 
+  const exportSession = useCallback(() => {
+    const clues = logs.filter((l) => l.message.includes("🔎"))
+    const errors = logs.filter((l) => l.type === "error")
+    const line = (l: LogEntry) =>
+      `- \`${formatTimestamp(l.timestamp)}\` ${l.message}`
+    const out: string[] = [
+      "# supabase-pwn — session report",
+      "",
+      `_generated ${new Date().toISOString()}_`,
+      "",
+      `- ${logs.length} log entries · ${clues.length} clues · ${errors.length} errors`,
+      "",
+    ]
+    if (clues.length > 0) {
+      out.push("## 🔎 Clues", "", ...clues.map(line), "")
+    }
+    if (errors.length > 0) {
+      out.push("## Errors", "", ...errors.map(line), "")
+    }
+    out.push(
+      "## Full log",
+      "",
+      ...logs.map((l) => `- \`${formatTimestamp(l.timestamp)}\` [${l.type.toUpperCase()}] ${l.message}`),
+    )
+    downloadFile(
+      `supabase-pwn-session-${new Date().toISOString().slice(0, 10)}.md`,
+      out.join("\n"),
+      "text/markdown",
+    )
+  }, [logs])
+
   const copyClues = useCallback(async () => {
     const text = logs
       .filter((l) => l.message.includes("🔎"))
@@ -315,6 +348,17 @@ export function OutputLog() {
             <Maximize2 className="size-3.5" />
           )}
         </Button>
+
+        {logs.length > 0 && (
+          <Button
+            variant="ghost"
+            size="icon-xs"
+            onClick={exportSession}
+            title="Export session report (.md)"
+          >
+            <FileDown className="size-3.5" />
+          </Button>
+        )}
 
         {clueCount > 0 && (
           <Button
