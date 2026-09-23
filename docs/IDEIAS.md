@@ -4,9 +4,14 @@ Gerado pela skill `sugerir`. Status: proposta · aceita · descartada · feita.
 Ideia descartada não volta a ser sugerida; o motivo fica registrado.
 
 ## 2026-09-23 · a partir de "Bruteforce sinaliza pistas sensíveis no log"
-- [ ] **Marcar tabelas sensíveis no seletor do DB** (P) — reusa `sensitiveTableHint`; um badge 🔎 nas tabelas suspeitas no dropdown do DatabaseExplorer, não só no log · `components/supabase-pwn/database-explorer.tsx` · _proposta_
-- [ ] **Pistas no bruteforce de buckets (Storage)** (P) — o `handleBruteforceBuckets` loga "Found bucket: X" plano; flag bucket público / nome sensível como CLUE, igual às tabelas · `components/supabase-pwn/storage-explorer.tsx` · _proposta_
-- [ ] **Resumo de pistas no fim do bruteforce** (P) — contador no log final ("N tabelas, K pistas sinalizadas") pra saber que vale rolar pra cima · `lib/supabase-context.tsx` · _proposta_
+- [x] **Marcar tabelas sensíveis no seletor do DB** (P) — badge 🔎 no dropdown + colunas sensíveis em vermelho · _feita_
+- [x] **Pistas no bruteforce de buckets (Storage)** (P) — bucket público / nome sensível vira CLUE no log · _feita_
+- [x] **Resumo de pistas no fim do bruteforce** (P) — contador "🔎 K clue(s) flagged" no resumo · _feita_
+
+## 2026-09-23 · a partir de "Pistas: badge no DB, CLUE em buckets, contador"
+- [ ] **Detectar segredos nos VALORES da amostra** (M) — hoje a pista é por nome de coluna; varrer os valores da linha (JWT `eyJ...`, e-mail, cartão, chave privada `-----BEGIN`) pega vazamento mesmo em coluna de nome inocente (ex.: coluna `data` com um JWT) · `lib/sensitive.ts` + bruteforce/autopwn · _proposta_
+- [ ] **Bruteforce de colunas sensíveis** (M) — quando a tabela existe mas RLS bloqueia as linhas, tentar `select=<coluna>` pra descobrir QUAIS colunas sensíveis existem (PostgREST distingue coluna inexistente de RLS); revela estrutura sem ler dados · `lib/supabase-context.tsx` · _proposta_
+- [ ] **Filtro/atalho "🔎 clues" no Output Log** (P) — as pistas são `warning`; um chip dedicado que filtra só as CLUE facilita revisar num scan grande · `components/supabase-pwn/output-log.tsx` · _proposta_
 
 ## ⏸️ PENDENTE (bloqueado — ação de conta, não código)
 - [ ] **Publicar imagem no GHCR** — a Action (`.github/workflows/docker.yml`) está pronta mas o **GitHub Actions está bloqueado por billing** na conta. Destravar: resolver billing (Settings → Billing) → Action publica no push → tornar o package GHCR público. Alternativa sem Actions: PAT com `write:packages` e publicar manualmente. _blocked_

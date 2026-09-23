@@ -145,6 +145,7 @@ export function OutputLog() {
   const [maximized, setMaximized] = useState(false)
   const [query, setQuery] = useState("")
   const [muted, setMuted] = useState<Set<LogType>>(() => new Set())
+  const [cluesOnly, setCluesOnly] = useState(false)
   const bottomRef = useRef<HTMLDivElement>(null)
   const scrollContainerRef = useRef<HTMLDivElement>(null)
 
@@ -163,14 +164,20 @@ export function OutputLog() {
     return c
   }, [logs])
 
+  const clueCount = useMemo(
+    () => logs.filter((l) => l.message.includes("🔎")).length,
+    [logs],
+  )
+
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase()
     return logs.filter(
       (l) =>
         !muted.has(l.type) &&
+        (!cluesOnly || l.message.includes("🔎")) &&
         (q === "" || l.message.toLowerCase().includes(q)),
     )
-  }, [logs, muted, query])
+  }, [logs, muted, query, cluesOnly])
 
   const sortedLogs = useMemo(() => {
     if (!newestFirst) return filtered
@@ -232,6 +239,23 @@ export function OutputLog() {
             )
           })}
         </div>
+
+        {/* Clue-only toggle */}
+        {clueCount > 0 && (
+          <button
+            type="button"
+            onClick={() => setCluesOnly((v) => !v)}
+            title="Show only clues (🔎)"
+            className={cn(
+              "rounded-sm border px-1.5 py-0.5 font-mono text-[10px] uppercase tracking-wide tabular-nums transition-opacity",
+              cluesOnly
+                ? "border-danger/40 bg-danger/15 text-danger"
+                : "border-border text-muted-foreground opacity-60",
+            )}
+          >
+            🔎 {clueCount}
+          </button>
+        )}
 
         {/* Search */}
         <div className="relative ml-auto">
