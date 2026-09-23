@@ -49,6 +49,50 @@ export function sensitiveTableHint(name: string): string | null {
   return hit ?? null
 }
 
+// Detect secrets by the VALUE, not the column name — catches leaks hidden in
+// innocuously-named columns (e.g. a "data" column holding a JWT).
+const VALUE_SIGNATURES: { kind: string; re: RegExp }[] = [
+  { kind: "JWT", re: /eyJ[A-Za-z0-9_-]{8,}\.eyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]+/ },
+  { kind: "Supabase key", re: /sb_(?:publishable|secret)_[A-Za-z0-9]{8,}/ },
+  { kind: "private key", re: /-----BEGIN (?:[A-Z ]+ )?PRIVATE KEY-----/ },
+  { kind: "AWS key", re: /\bAKIA[0-9A-Z]{16}\b/ },
+  { kind: "Stripe key", re: /\b(?:sk|pk|rk)_(?:live|test)_[A-Za-z0-9]{16,}/ },
+  { kind: "email", re: /[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}/ },
+  { kind: "credit card", re: /\b(?:\d[ -]?){15,16}\b/ },
+  { kind: "bcrypt hash", re: /\$2[aby]\$\d{2}\$[./A-Za-z0-9]{53}/ },
+]
+
+/**
+ * Scan a row's VALUES for secret-looking content. Returns the distinct kinds
+ * found and which columns carried them.
+ */
+export function flagSensitiveValues(
+  row: Record<string, unknown>,
+): { kinds: string[]; hits: { column: string; kind: string }[] } {
+  const hits: { column: string; kind: string }[] = []
+  const kinds = new Set<string>()
+  for (const [col, val] of Object.entries(row)) {
+    if (val == null) continue
+    const s = typeof val === "string" ? val : JSON.stringify(val)
+    if (s.length > 20000) continue // skip huge blobs
+    for (const { kind, re } of VALUE_SIGNATURES) {
+      if (re.test(s)) {
+        hits.push({ column: col, kind })
+        kinds.add(kind)
+      }
+    }
+  }
+  return { kinds: [...kinds], hits }
+}
+
+// Curated column names worth probing on tables whose rows are RLS-blocked, to
+// reveal structure without reading data (see column bruteforce).
+export const SENSITIVE_COLUMN_PROBES = [
+  "email", "password", "password_hash", "token", "access_token", "api_key",
+  "apikey", "secret", "phone", "cpf", "ssn", "credit_card", "card_number",
+  "stripe_customer_id", "is_admin", "role", "balance",
+]
+
 /**
  * Given a list of column names, return the distinct human labels of the
  * sensitive kinds detected (e.g. ["email", "password"]).

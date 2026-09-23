@@ -3,7 +3,7 @@
 // vulnerable" layer that sits on top of ScanRecord.
 
 import type { ScanRecord } from "@/lib/scan-history"
-import { flagSensitiveColumns } from "@/lib/sensitive"
+import { flagSensitiveColumns, flagSensitiveValues } from "@/lib/sensitive"
 
 export type FindingSeverity = "critical" | "high" | "medium" | "low" | "info"
 
@@ -43,19 +43,26 @@ export function deriveFindings(record: ScanRecord): Finding[] {
   for (const r of record.db) {
     if (r.select === "allowed") {
       const sensitive = flagSensitiveColumns(r.columns)
+      const valSecrets =
+        r.sample && typeof r.sample === "object" && !Array.isArray(r.sample)
+          ? flagSensitiveValues(r.sample as Record<string, unknown>).kinds
+          : []
       const rowText =
         r.rowCount != null ? `${r.rowCount.toLocaleString()} row(s)` : "readable rows"
       const colText = r.colCount != null ? `${r.colCount} column(s)` : "unknown columns"
       const sensNote =
         sensitive.length > 0 ? ` — includes ${sensitive.join(", ")}` : ""
+      const valNote =
+        valSecrets.length > 0 ? ` — secret values: ${valSecrets.join(", ")}` : ""
       findings.push({
         id: `db-select-${r.name}`,
-        // PII or an anon POV makes this critical; otherwise high.
-        severity: sensitive.length > 0 || anon ? "critical" : "high",
+        // PII, secret values, or an anon POV makes this critical; otherwise high.
+        severity:
+          sensitive.length > 0 || valSecrets.length > 0 || anon ? "critical" : "high",
         category: "database",
         target: r.name,
         title: `Table "${r.name}" exposes data`,
-        evidence: `${rowText}, ${colText}${sensNote} — ${povNote}`,
+        evidence: `${rowText}, ${colText}${sensNote}${valNote} — ${povNote}`,
         remediation:
           "Enable Row Level Security on the table and add a policy that scopes rows to the authenticated user (e.g. auth.uid() = user_id).",
       })

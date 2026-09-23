@@ -1,7 +1,12 @@
 "use client"
 
 import { uuid } from "@/lib/utils"
-import { flagSensitiveColumns, sensitiveTableHint } from "@/lib/sensitive"
+import {
+  flagSensitiveColumns,
+  flagSensitiveValues,
+  sensitiveTableHint,
+  SENSITIVE_COLUMN_PROBES,
+} from "@/lib/sensitive"
 
 import {
   createContext,
@@ -788,6 +793,7 @@ export function SupabaseProvider({ children }: { children: ReactNode }) {
       const hintedNames = new Set<string>() // tables revealed by PGRST205 hints
       const batchSize = 10
       let clues = 0 // sensitive tables/columns flagged during this run
+      const emptyTables: string[] = [] // exist but returned 0 rows (RLS/empty)
 
       const probeTable = async (table: string) => {
         if (existing.has(table) || discovered.includes(table)) return null
@@ -831,13 +837,18 @@ export function SupabaseProvider({ children }: { children: ReactNode }) {
               required: false,
             }))
             const sensCols = flagSensitiveColumns(colNames)
-            if (sensCols.length > 0) {
-              // The strongest lead: readable table with PII/secret columns.
+            const { kinds: valKinds, hits: valHits } = flagSensitiveValues(first)
+            if (sensCols.length > 0 || valKinds.length > 0) {
+              // The strongest lead: readable table with PII/secret columns or
+              // secret-looking values.
               clues++
+              const parts: string[] = []
+              if (sensCols.length > 0) parts.push(`sensitive columns: ${sensCols.join(", ")}`)
+              if (valKinds.length > 0) parts.push(`secrets in values: ${valKinds.join(", ")}`)
               addLog(
                 "warning",
-                `🔎 CLUE — "${r.table}" exposes sensitive data: ${sensCols.join(", ")} (${rows.length} row visible, ${colNames.length} cols)`,
-                { table: r.table, sensitiveColumns: sensCols, columns: colNames, sample: first },
+                `🔎 CLUE — "${r.table}" — ${parts.join("; ")} (${rows.length} row visible, ${colNames.length} cols)`,
+                { table: r.table, sensitiveColumns: sensCols, valueHits: valHits, columns: colNames, sample: first },
               )
             } else if (tableHint) {
               clues++
@@ -854,15 +865,19 @@ export function SupabaseProvider({ children }: { children: ReactNode }) {
                 { columns: colNames, sample: first },
               )
             }
-          } else if (tableHint) {
-            clues++
-            addLog(
-              "warning",
-              `🔎 CLUE — sensitive-looking table "${r.table}" exists (empty or RLS blocked)`,
-              { table: r.table, matched: tableHint },
-            )
           } else {
-            addLog("success", `Found: ${r.table} (empty or RLS blocked)`)
+            // rows == 0 (empty or RLS-filtered) — remember for column probing.
+            emptyTables.push(r.table)
+            if (tableHint) {
+              clues++
+              addLog(
+                "warning",
+                `🔎 CLUE — sensitive-looking table "${r.table}" exists (empty or RLS blocked)`,
+                { table: r.table, matched: tableHint },
+              )
+            } else {
+              addLog("success", `Found: ${r.table} (empty or RLS blocked)`)
+            }
           }
         } else if (r.hint) {
           // PGRST205 hint revealed a different table name
@@ -900,6 +915,55 @@ export function SupabaseProvider({ children }: { children: ReactNode }) {
           const results = await Promise.allSettled(batch.map(probeTable))
           for (const r of results) {
             if (r.status === "fulfilled" && r.value) processResult(r.value)
+          }
+        }
+      }
+
+      // Third pass: column bruteforce on RLS-blocked (empty) tables — reveal
+      // which sensitive columns exist without reading any rows.
+      const colProbeTargets = emptyTables.slice(0, 25)
+      if (colProbeTargets.length > 0) {
+        addLog(
+          "info",
+          `Probing sensitive columns on ${colProbeTargets.length} RLS-blocked table(s)…`,
+        )
+        for (const table of colProbeTargets) {
+          const foundCols: string[] = []
+          for (let i = 0; i < SENSITIVE_COLUMN_PROBES.length; i += batchSize) {
+            const batch = SENSITIVE_COLUMN_PROBES.slice(i, i + batchSize)
+            const results = await Promise.allSettled(
+              batch.map(async (col) => {
+                const res = await fetch(
+                  `${state.projectUrl}/rest/v1/${table}?select=${encodeURIComponent(col)}&limit=1`,
+                  {
+                    headers: {
+                      apikey: state.apiKey,
+                      Authorization: `Bearer ${state.session?.access_token ?? state.apiKey}`,
+                    },
+                  },
+                )
+                // 200 = the column exists (rows may still be RLS-filtered);
+                // 400 (42703) = column doesn't exist.
+                return res.ok ? col : null
+              }),
+            )
+            for (const r of results) {
+              if (r.status === "fulfilled" && r.value) foundCols.push(r.value)
+            }
+          }
+          if (foundCols.length > 0) {
+            clues++
+            const cols = columns[table] ?? []
+            const known = new Set(cols.map((c) => c.name))
+            for (const c of foundCols) {
+              if (!known.has(c)) cols.push({ name: c, type: "unknown", required: false })
+            }
+            columns[table] = cols
+            addLog(
+              "warning",
+              `🔎 CLUE — RLS-blocked table "${table}" has sensitive columns: ${foundCols.join(", ")}`,
+              { table, columns: foundCols },
+            )
           }
         }
       }
