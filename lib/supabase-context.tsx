@@ -607,7 +607,7 @@ export function SupabaseProvider({ children }: { children: ReactNode }) {
 
   // -- Scan signal (lets other components ask AutoPwn to run) --------------
   const [scanSignal, setScanSignal] = useState(0)
-  const [activeTab, setActiveTab] = useState("database")
+  const [activeTab, setActiveTab] = useState("recon")
   const triggerScan = useCallback(() => {
     setActiveTab("autopwn")
     setScanSignal((n) => n + 1)

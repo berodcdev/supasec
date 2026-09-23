@@ -28,9 +28,14 @@ Ideia descartada não volta a ser sugerida; o motivo fica registrado.
 - [x] **Descoberta de Edge Functions na própria aba** (P) — botão Discover + chips · _feita_
 
 ## 2026-09-23 · reprodutibilidade / persistência
-- [ ] **Copy-as-curl no Storage** (P) — download/signed URL/public URL ainda não têm o botão; fecha a cobertura de reprodutibilidade · `components/supabase-pwn/storage-explorer.tsx` · _proposta_
-- [ ] **Persistir o log entre reloads** (P) — hoje o Output Log some ao atualizar a página; salvar no localStorage (capado, últimas N) evita perder a sessão · `lib/supabase-context.tsx` · _proposta_
-- [ ] **Histórico de requests com replay** (M) — lista das últimas operações pra re-executar/editar num clique (pentester repete muito) · nova peça · _proposta_
+- [x] **Copy-as-curl no Storage** (P) — curl em List/Download/Public/Signed · _feita_
+- [x] **Persistir o log entre reloads** (P) — localStorage, últimas 500 · _feita_
+- [x] **Histórico de requests com replay** (M) — painel com copy-curl + Replay (leituras) · _feita_
+
+## 2026-09-23 · visão geral / consistência
+- [ ] **Persistir o histórico de requests** (P) — igual ao log, hoje some no F5; salvar no localStorage · `lib/supabase-context.tsx` · _proposta_
+- [ ] **Dashboard de Recon** (M) — painel/aba inicial com o resumo da sessão (N tabelas, buckets, funções, findings/clues) e atalhos; hoje tudo espalhado nas abas · nova aba · _proposta_
+- [ ] **Marcar buckets sensíveis no seletor do Storage** (P) — o 🔎 das tabelas no DB, aplicado ao dropdown de buckets · `components/supabase-pwn/storage-explorer.tsx` · _proposta_
 
 ## ⏸️ PENDENTE (bloqueado — ação de conta, não código)
 - [ ] **Publicar imagem no GHCR** — a Action (`.github/workflows/docker.yml`) está pronta mas o **GitHub Actions está bloqueado por billing** na conta. Destravar: resolver billing (Settings → Billing) → Action publica no push → tornar o package GHCR público. Alternativa sem Actions: PAT com `write:packages` e publicar manualmente. _blocked_

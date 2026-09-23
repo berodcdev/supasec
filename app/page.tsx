@@ -14,6 +14,7 @@ import { EdgeFunctions } from "@/components/supabase-pwn/edge-functions"
 import { Realtime } from "@/components/supabase-pwn/realtime"
 import { AutoPwn } from "@/components/supabase-pwn/autopwn"
 import { OutputLog } from "@/components/supabase-pwn/output-log"
+import { ReconDashboard } from "@/components/supabase-pwn/recon-dashboard"
 import { EmptyState } from "@/components/supabase-pwn/shared/empty-state"
 import {
   Tabs,
@@ -23,6 +24,7 @@ import {
 } from "@/components/ui/tabs"
 import { useSupabase } from "@/lib/supabase-context"
 import {
+  Crosshair,
   Database,
   HardDrive,
   Zap,
@@ -48,6 +50,10 @@ export default function Home() {
                   className="flex h-full flex-col overflow-hidden"
                 >
                   <TabsList variant="line" className="mx-4 mt-2 w-fit shrink-0">
+                    <TabsTrigger value="recon">
+                      <Crosshair className="mr-1.5 h-3.5 w-3.5" />
+                      Recon
+                    </TabsTrigger>
                     <TabsTrigger value="database">
                       <Database className="mr-1.5 h-3.5 w-3.5" />
                       Database
@@ -69,6 +75,12 @@ export default function Home() {
                       Autopwn
                     </TabsTrigger>
                   </TabsList>
+                  <TabsContent
+                    value="recon"
+                    className="flex-1 min-h-0 overflow-auto"
+                  >
+                    <ReconDashboard />
+                  </TabsContent>
                   <TabsContent
                     value="database"
                     className="flex-1 min-h-0 overflow-auto p-4"
