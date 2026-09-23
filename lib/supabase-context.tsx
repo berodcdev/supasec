@@ -787,6 +787,7 @@ export function SupabaseProvider({ children }: { children: ReactNode }) {
       const existing = new Set(state.schema?.tables ?? [])
       const hintedNames = new Set<string>() // tables revealed by PGRST205 hints
       const batchSize = 10
+      let clues = 0 // sensitive tables/columns flagged during this run
 
       const probeTable = async (table: string) => {
         if (existing.has(table) || discovered.includes(table)) return null
@@ -832,12 +833,14 @@ export function SupabaseProvider({ children }: { children: ReactNode }) {
             const sensCols = flagSensitiveColumns(colNames)
             if (sensCols.length > 0) {
               // The strongest lead: readable table with PII/secret columns.
+              clues++
               addLog(
                 "warning",
                 `🔎 CLUE — "${r.table}" exposes sensitive data: ${sensCols.join(", ")} (${rows.length} row visible, ${colNames.length} cols)`,
                 { table: r.table, sensitiveColumns: sensCols, columns: colNames, sample: first },
               )
             } else if (tableHint) {
+              clues++
               addLog(
                 "warning",
                 `🔎 CLUE — sensitive-looking table "${r.table}" is readable (${rows.length} row visible, ${colNames.length} cols)`,
@@ -852,6 +855,7 @@ export function SupabaseProvider({ children }: { children: ReactNode }) {
               )
             }
           } else if (tableHint) {
+            clues++
             addLog(
               "warning",
               `🔎 CLUE — sensitive-looking table "${r.table}" exists (empty or RLS blocked)`,
@@ -865,6 +869,7 @@ export function SupabaseProvider({ children }: { children: ReactNode }) {
           if (!existing.has(r.hint) && !discovered.includes(r.hint) && !hintedNames.has(r.hint)) {
             hintedNames.add(r.hint)
             const hintSensitive = sensitiveTableHint(r.hint)
+            if (hintSensitive) clues++
             addLog(
               hintSensitive ? "warning" : "info",
               hintSensitive
@@ -905,9 +910,10 @@ export function SupabaseProvider({ children }: { children: ReactNode }) {
 
       const hintCount = hintsToProbe.length
       addLog(
-        "info",
+        clues > 0 ? "warning" : "info",
         `Bruteforce complete. Found ${discovered.length} new table(s) out of ${wordlist.length} tried.` +
-          (hintCount > 0 ? ` ${hintCount} additional table(s) found via PGRST205 hints.` : ""),
+          (hintCount > 0 ? ` ${hintCount} additional table(s) found via PGRST205 hints.` : "") +
+          (clues > 0 ? ` 🔎 ${clues} clue(s) flagged — scroll up to review.` : ""),
       )
     },
     [state.projectUrl, state.apiKey, state.session, state.schema?.tables, addLog, parseHintedTable],
