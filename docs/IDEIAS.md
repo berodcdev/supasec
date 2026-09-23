@@ -23,9 +23,14 @@ Ideia descartada não volta a ser sugerida; o motivo fica registrado.
 - [x] **Role do JWT nos findings/export do AutoPwn** (P) — `describeJwtsInRow` na evidência do finding · _feita_
 
 ## 2026-09-23 · outra área do produto (reporting / reprodutibilidade / discovery-UX)
-- [ ] **Copy-as-curl em cada operação** (M) — botão que gera o `curl` equivalente (SELECT/INSERT/RPC/storage/edge) com apikey+Authorization; pentester adora reproduzir fora da ferramenta e colar no report · telas de operação · _proposta_
-- [ ] **Relatório de sessão consolidado** (M) — hoje só o AutoPwn exporta; as pistas do bruteforce/RPC/edge/storage e achados manuais só vivem no log; um export único (scan + clues + manuais) fecha o ciclo · `lib/scan-report.ts` + Output Log · _proposta_
-- [ ] **Descoberta de Edge Functions na própria aba** (P) — hoje só o AutoPwn faz bruteforce de funções; a aba Edge Functions exige nome manual; reusar `FUNCTION_WORDLIST` ali dá descoberta no lugar onde se invoca · `edge-functions.tsx` · _proposta_
+- [x] **Copy-as-curl em cada operação** (M) — botão `curl` em DB (SELECT/INSERT/UPDATE/DELETE/RPC) e edge · _feita_
+- [x] **Relatório de sessão consolidado** (M) — "Export session report (.md)" no Output Log · _feita_
+- [x] **Descoberta de Edge Functions na própria aba** (P) — botão Discover + chips · _feita_
+
+## 2026-09-23 · reprodutibilidade / persistência
+- [ ] **Copy-as-curl no Storage** (P) — download/signed URL/public URL ainda não têm o botão; fecha a cobertura de reprodutibilidade · `components/supabase-pwn/storage-explorer.tsx` · _proposta_
+- [ ] **Persistir o log entre reloads** (P) — hoje o Output Log some ao atualizar a página; salvar no localStorage (capado, últimas N) evita perder a sessão · `lib/supabase-context.tsx` · _proposta_
+- [ ] **Histórico de requests com replay** (M) — lista das últimas operações pra re-executar/editar num clique (pentester repete muito) · nova peça · _proposta_
 
 ## ⏸️ PENDENTE (bloqueado — ação de conta, não código)
 - [ ] **Publicar imagem no GHCR** — a Action (`.github/workflows/docker.yml`) está pronta mas o **GitHub Actions está bloqueado por billing** na conta. Destravar: resolver billing (Settings → Billing) → Action publica no push → tornar o package GHCR público. Alternativa sem Actions: PAT com `write:packages` e publicar manualmente. _blocked_

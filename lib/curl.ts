@@ -40,6 +40,10 @@ export function functionsUrl(projectUrl: string, name: string): string {
   return `${projectUrl.replace(/\/$/, "")}/functions/v1/${encodeURIComponent(name)}`
 }
 
+export function storageUrl(projectUrl: string, path: string): string {
+  return `${projectUrl.replace(/\/$/, "")}/storage/v1/${path}`
+}
+
 /** Render a curl command. Body is JSON-encoded unless already a string. */
 export function toCurl(opts: {
   method?: string
