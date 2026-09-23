@@ -1,6 +1,7 @@
 "use client"
 
 import { uuid } from "@/lib/utils"
+import type { RequestRecord } from "@/lib/curl"
 import {
   flagSensitiveColumns,
   flagSensitiveValues,
@@ -159,6 +160,10 @@ type SupabaseContextValue = SupabaseState & {
   /** Cross-tab focus request (e.g. a finding asking to open its table/bucket). */
   focusTarget: { kind: string; name: string } | null
   focusOn: (kind: string, name: string) => void
+  /** Recent executed requests, newest first — for the history/replay panel. */
+  requestHistory: RequestRecord[]
+  recordRequest: (r: Omit<RequestRecord, "id" | "timestamp">) => void
+  clearHistory: () => void
 }
 
 // ---------------------------------------------------------------------------
@@ -618,6 +623,18 @@ export function SupabaseProvider({ children }: { children: ReactNode }) {
     if (kind === "database") setActiveTab("database")
     else if (kind === "storage") setActiveTab("storage")
   }, [])
+
+  // -- Request history (for the replay panel) ------------------------------
+  const [requestHistory, setRequestHistory] = useState<RequestRecord[]>([])
+  const recordRequest = useCallback(
+    (r: Omit<RequestRecord, "id" | "timestamp">) => {
+      setRequestHistory((prev) =>
+        [{ ...r, id: uuid(), timestamp: new Date() }, ...prev].slice(0, 50),
+      )
+    },
+    [],
+  )
+  const clearHistory = useCallback(() => setRequestHistory([]), [])
 
   // -- Persist the output log across page reloads --------------------------
   const [logsHydrated, setLogsHydrated] = useState(false)
@@ -1091,8 +1108,11 @@ export function SupabaseProvider({ children }: { children: ReactNode }) {
       setActiveTab,
       focusTarget,
       focusOn,
+      requestHistory,
+      recordRequest,
+      clearHistory,
     }),
-    [state, initialize, addLog, clearLogs, signOut, disconnect, discoverTables, importSchemaDump, mergeHints, scanSignal, triggerScan, activeTab, focusTarget, focusOn],
+    [state, initialize, addLog, clearLogs, signOut, disconnect, discoverTables, importSchemaDump, mergeHints, scanSignal, triggerScan, activeTab, focusTarget, focusOn, requestHistory, recordRequest, clearHistory],
   )
 
   return (

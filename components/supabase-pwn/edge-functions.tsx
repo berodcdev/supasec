@@ -46,7 +46,7 @@ function createHeaderRow(): HeaderRow {
 // ---------------------------------------------------------------------------
 
 export function EdgeFunctions() {
-  const { client, addLog, projectUrl, apiKey } = useSupabase()
+  const { client, addLog, projectUrl, apiKey, recordRequest } = useSupabase()
 
   // -- State ----------------------------------------------------------------
   const [functionName, setFunctionName] = useState("")
@@ -113,6 +113,13 @@ export function EdgeFunctions() {
         body,
         headers,
       })
+      recordRequest({
+        label: `edge ${name}`,
+        method: "POST",
+        url: functionsUrl(projectUrl, name),
+        headers: { ...restHeaders(apiKey), "content-type": "application/json", ...headers },
+        body: bodyJson.trim() || "{}",
+      })
 
       const { data, error } = await client.functions.invoke(name, {
         body: body !== undefined ? JSON.parse(JSON.stringify(body)) : undefined,
@@ -156,7 +163,7 @@ export function EdgeFunctions() {
     } finally {
       setLoading(false)
     }
-  }, [client, functionName, bodyJson, headerRows, addLog])
+  }, [client, functionName, bodyJson, headerRows, addLog, recordRequest, projectUrl, apiKey])
 
   // -- Discover (bruteforce function names) ---------------------------------
 

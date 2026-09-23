@@ -2,6 +2,16 @@
 // (for PoCs / reports). All requests hit PostgREST / the functions gateway with
 // the same apikey + Authorization headers.
 
+export type RequestRecord = {
+  id: string
+  timestamp: Date
+  label: string
+  method: string
+  url: string
+  headers: Record<string, string>
+  body?: string
+}
+
 export function restHeaders(
   apiKey: string,
   token?: string | null,
