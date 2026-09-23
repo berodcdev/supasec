@@ -240,7 +240,7 @@ function SelectTab({
   columns: { name: string; type: string; required: boolean }[]
   onSendToUpdate?: (row: Record<string, unknown>) => void
 }) {
-  const { client, addLog, projectUrl, apiKey, session } = useSupabase()
+  const { client, addLog, projectUrl, apiKey, session, recordRequest } = useSupabase()
   const { filters, addFilter, removeFilter, changeFilter } = useFilterState()
 
   const [selectColumns, setSelectColumns] = useState("*")
@@ -259,6 +259,19 @@ function SelectTab({
 
     try {
       addLog("info", `SELECT from "${table}" — columns: ${selectColumns}`)
+
+      const histParams: Record<string, string> = {
+        select: selectColumns || "*",
+        ...filtersToParams(filters),
+      }
+      if (orderByColumn) histParams.order = `${orderByColumn}.${ascending ? "asc" : "desc"}`
+      histParams.limit = String(Math.min(Math.max(1, limit), 10000))
+      recordRequest({
+        label: `SELECT ${table}`,
+        method: "GET",
+        url: restUrl(projectUrl, table, histParams),
+        headers: restHeaders(apiKey, session?.access_token),
+      })
 
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       let query: any = client.from(table).select(selectColumns)
@@ -293,7 +306,7 @@ function SelectTab({
     } finally {
       setLoading(false)
     }
-  }, [client, table, selectColumns, filters, orderByColumn, ascending, limit, addLog])
+  }, [client, table, selectColumns, filters, orderByColumn, ascending, limit, addLog, recordRequest, projectUrl, apiKey, session])
 
   return (
     <div className="space-y-4">
@@ -849,7 +862,7 @@ function DeleteTab({
 // ---------------------------------------------------------------------------
 
 function RpcTab() {
-  const { client, schema, addLog, projectUrl, apiKey, session } = useSupabase()
+  const { client, schema, addLog, projectUrl, apiKey, session, recordRequest } = useSupabase()
   const functions = useMemo(() => schema?.functions ?? [], [schema])
 
   const [fnName, setFnName] = useState("")
@@ -884,6 +897,15 @@ function RpcTab() {
     try {
       const parsedArgs = args.trim() ? JSON.parse(args) : {}
       addLog("info", `RPC call: ${fnName}`, parsedArgs)
+      recordRequest({
+        label: `RPC ${fnName}`,
+        method: "POST",
+        url: restUrl(projectUrl, `rpc/${fnName}`),
+        headers: restHeaders(apiKey, session?.access_token, {
+          "content-type": "application/json",
+        }),
+        body: args.trim() || "{}",
+      })
 
       const { data, error } = await client.rpc(fnName, parsedArgs)
 
@@ -908,7 +930,7 @@ function RpcTab() {
     } finally {
       setLoading(false)
     }
-  }, [client, fnName, args, addLog])
+  }, [client, fnName, args, addLog, recordRequest, projectUrl, apiKey, session])
 
   return (
     <div className="space-y-4">

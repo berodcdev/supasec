@@ -22,6 +22,7 @@ import {
 import { cn } from "@/lib/utils"
 import { useSupabase } from "@/lib/supabase-context"
 import { downloadFile } from "@/lib/scan-report"
+import { RequestHistoryButton } from "@/components/supabase-pwn/shared/request-history"
 import type { LogEntry } from "@/lib/supabase-context"
 import { Button } from "@/components/ui/button"
 import { ScrollArea } from "@/components/ui/scroll-area"
@@ -326,6 +327,8 @@ export function OutputLog() {
             </button>
           )}
         </div>
+
+        <RequestHistoryButton />
 
         <Button
           variant="ghost"
