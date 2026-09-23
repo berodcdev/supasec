@@ -24,6 +24,7 @@ import { JsonViewer } from "@/components/supabase-pwn/shared/json-viewer"
 import { StatusBadge, type Severity } from "@/components/supabase-pwn/shared/status-badge"
 import { EmptyState } from "@/components/supabase-pwn/shared/empty-state"
 import { ReticlePanel } from "@/components/supabase-pwn/shared/reticle-panel"
+import { isSensitiveColumn, sensitiveTableHint } from "@/lib/sensitive"
 
 
 // ---------------------------------------------------------------------------
@@ -1184,6 +1185,11 @@ export function DatabaseExplorer() {
                       js
                     </Badge>
                   )}
+                  {sensitiveTableHint(e.name) && (
+                    <Badge variant="critical" className="text-[9px] px-1 py-0 leading-tight" title="Sensitive-looking table">
+                      🔎
+                    </Badge>
+                  )}
                 </span>
               </SelectItem>
             ))}
@@ -1328,7 +1334,12 @@ export function DatabaseExplorer() {
       {selectedTable && selectedColumns.length > 0 && (
         <div className="flex flex-wrap gap-1">
           {selectedColumns.map((col) => (
-            <Badge key={col.name} variant="secondary" className="text-xs">
+            <Badge
+              key={col.name}
+              variant={isSensitiveColumn(col.name) ? "critical" : "secondary"}
+              className="text-xs"
+              title={isSensitiveColumn(col.name) ? "Sensitive / PII column" : undefined}
+            >
               {col.name}
               <span className="ml-1 text-muted-foreground">{col.type}</span>
               {col.required && (

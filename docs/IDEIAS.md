@@ -3,6 +3,11 @@
 Gerado pela skill `sugerir`. Status: proposta · aceita · descartada · feita.
 Ideia descartada não volta a ser sugerida; o motivo fica registrado.
 
+## 2026-09-23 · a partir de "Bruteforce sinaliza pistas sensíveis no log"
+- [ ] **Marcar tabelas sensíveis no seletor do DB** (P) — reusa `sensitiveTableHint`; um badge 🔎 nas tabelas suspeitas no dropdown do DatabaseExplorer, não só no log · `components/supabase-pwn/database-explorer.tsx` · _proposta_
+- [ ] **Pistas no bruteforce de buckets (Storage)** (P) — o `handleBruteforceBuckets` loga "Found bucket: X" plano; flag bucket público / nome sensível como CLUE, igual às tabelas · `components/supabase-pwn/storage-explorer.tsx` · _proposta_
+- [ ] **Resumo de pistas no fim do bruteforce** (P) — contador no log final ("N tabelas, K pistas sinalizadas") pra saber que vale rolar pra cima · `lib/supabase-context.tsx` · _proposta_
+
 ## ⏸️ PENDENTE (bloqueado — ação de conta, não código)
 - [ ] **Publicar imagem no GHCR** — a Action (`.github/workflows/docker.yml`) está pronta mas o **GitHub Actions está bloqueado por billing** na conta. Destravar: resolver billing (Settings → Billing) → Action publica no push → tornar o package GHCR público. Alternativa sem Actions: PAT com `write:packages` e publicar manualmente. _blocked_
 

@@ -31,6 +31,7 @@ import { Separator } from "@/components/ui/separator"
 import { DataTable, type Column } from "@/components/supabase-pwn/shared/data-table"
 import { StatusBadge } from "@/components/supabase-pwn/shared/status-badge"
 import { EmptyState } from "@/components/supabase-pwn/shared/empty-state"
+import { sensitiveTableHint } from "@/lib/sensitive"
 
 // ---------------------------------------------------------------------------
 // Types
@@ -206,6 +207,14 @@ export function StorageExplorer() {
         `Found ${bucketList.length} bucket(s)`,
         bucketList.map((b) => ({ name: b.name, public: b.public })),
       )
+      // Flag leads: public buckets (anyone can read) and sensitive-looking names.
+      for (const b of bucketList) {
+        if (b.public) {
+          addLog("warning", `🔎 CLUE — public bucket "${b.name}" (anyone can read its files)`, { bucket: b.name })
+        } else if (sensitiveTableHint(b.name)) {
+          addLog("warning", `🔎 CLUE — sensitive-looking bucket "${b.name}"`, { bucket: b.name })
+        }
+      }
     } catch (err) {
       addLog(
         "error",
@@ -256,7 +265,13 @@ export function StorageExplorer() {
               created_at: "",
               updated_at: "",
             })
-            addLog("success", `Found bucket: ${name}`)
+            const hint = sensitiveTableHint(name)
+            addLog(
+              hint ? "warning" : "success",
+              hint
+                ? `🔎 CLUE — sensitive-looking bucket "${name}" is accessible`
+                : `Found bucket: ${name}`,
+            )
           }
         }
       }
