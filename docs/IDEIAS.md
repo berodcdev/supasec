@@ -35,8 +35,11 @@ Ideia descartada não volta a ser sugerida; o motivo fica registrado.
 ## 2026-09-23 · visão geral / consistência
 - [ ] **Persistir o histórico de requests** (P) — igual ao log, hoje some no F5; salvar no localStorage · `lib/supabase-context.tsx` · _proposta_
 - [x] **Dashboard de Recon** (M) — aba inicial com overview + atalhos · _feita_
-- [ ] **Marcar buckets sensíveis no seletor do Storage** (P) — o 🔎 das tabelas no DB, aplicado ao dropdown de buckets · `components/supabase-pwn/storage-explorer.tsx` · _proposta_
-- [ ] **Últimas pistas no dashboard** (P) — mostrar as ~5 pistas mais recentes (não só a contagem) direto no overview · `components/supabase-pwn/recon-dashboard.tsx` · _proposta_
+- [x] **Marcar buckets sensíveis no seletor do Storage** (P) — badge 🔎 no dropdown · _feita_
+- [x] **Últimas pistas no dashboard** (P) — card "Recent clues" · _feita_
+
+## 2026-09-23 · robustez
+- [ ] **Testes das funções puras de detecção** (M) — `lib/sensitive.ts` (regex de JWT/segredos/PII), `lib/findings.ts` e `lib/curl.ts` têm lógica real e **zero teste**; um regex quebrado derruba silenciosamente a detecção de pistas (o coração atual da ferramenta) · adicionar vitest + specs dessas libs · _proposta_
 
 ## ⏸️ PENDENTE (bloqueado — ação de conta, não código)
 - [ ] **Publicar imagem no GHCR** — a Action (`.github/workflows/docker.yml`) está pronta mas o **GitHub Actions está bloqueado por billing** na conta. Destravar: resolver billing (Settings → Billing) → Action publica no push → tornar o package GHCR público. Alternativa sem Actions: PAT com `write:packages` e publicar manualmente. _blocked_
