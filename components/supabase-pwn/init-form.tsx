@@ -249,7 +249,12 @@ export function InitForm() {
 
   return (
     <Collapsible open={isOpen} onOpenChange={setIsOpen}>
-      <Card>
+      <Card className="relative rounded-none border-primary/25 bg-card/50">
+        {/* datum registration corners */}
+        <span className="datum-corner left-0 top-0 border-l border-t" />
+        <span className="datum-corner right-0 top-0 border-r border-t" />
+        <span className="datum-corner bottom-0 left-0 border-b border-l" />
+        <span className="datum-corner bottom-0 right-0 border-b border-r" />
         <CardHeader>
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
@@ -262,7 +267,14 @@ export function InitForm() {
                   )}
                 </Button>
               </CollapsibleTrigger>
-              <CardTitle className="text-sm">Supabase Connection</CardTitle>
+              <div className="leading-tight">
+                <div className="font-mono text-[9px] uppercase tracking-[0.25em] text-primary">
+                  CONN·01
+                </div>
+                <CardTitle className="font-mono text-sm uppercase tracking-wide">
+                  Target acquisition
+                </CardTitle>
+              </div>
               {initialized && (
                 <>
                   <Badge className="bg-primary text-primary-foreground hover:bg-primary">
@@ -300,8 +312,8 @@ export function InitForm() {
         <CollapsibleContent>
           <CardContent className="space-y-4">
             {!initialized && (
-              <div className="space-y-2 rounded-md border border-dashed p-3">
-                <Label htmlFor="extract-urls" className="flex items-center gap-2">
+              <div className="space-y-2 rounded-none border border-dashed border-primary/25 p-3">
+                <Label htmlFor="extract-urls" className="flex items-center gap-2 font-mono text-[11px] uppercase tracking-widest text-muted-foreground">
                   <Globe className="h-3.5 w-3.5" />
                   Extract from website URL(s)
                 </Label>
@@ -355,7 +367,7 @@ export function InitForm() {
             )}
 
             <div className="space-y-2">
-              <Label htmlFor="project-url">Project URL</Label>
+              <Label htmlFor="project-url" className="font-mono text-[11px] uppercase tracking-widest text-muted-foreground">Project URL</Label>
               <Input
                 id="project-url"
                 type="url"
@@ -374,7 +386,7 @@ export function InitForm() {
 
             <div className="space-y-2">
               <div className="flex items-center gap-2">
-                <Label htmlFor="api-key">API Key</Label>
+                <Label htmlFor="api-key" className="font-mono text-[11px] uppercase tracking-widest text-muted-foreground">API Key</Label>
                 {key.trim().length > 5 && (() => {
                   const kt = detectKeyType(key.trim())
                   const info = KEY_TYPE_LABELS[kt]
@@ -417,17 +429,17 @@ export function InitForm() {
 
             {!initialized && (
               <Button
-                className="w-full"
+                className="w-full rounded-none bg-armed font-mono uppercase tracking-[0.2em] text-armed-foreground shadow-[0_0_20px_-6px_var(--color-armed)] hover:bg-armed/90"
                 onClick={handleInitialize}
                 disabled={!canSubmit || loading}
               >
                 {loading ? (
                   <>
                     <Loader2 className="h-4 w-4 animate-spin" />
-                    Connecting...
+                    Connecting…
                   </>
                 ) : (
-                  "Initialize"
+                  "▸ Initialize"
                 )}
               </Button>
             )}

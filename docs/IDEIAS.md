@@ -39,7 +39,8 @@ Ideia descartada não volta a ser sugerida; o motivo fica registrado.
 - [x] **Últimas pistas no dashboard** (P) — card "Recent clues" · _feita_
 
 ## 2026-09-23 · robustez
-- [ ] **Testes das funções puras de detecção** (M) — `lib/sensitive.ts` (regex de JWT/segredos/PII), `lib/findings.ts` e `lib/curl.ts` têm lógica real e **zero teste**; um regex quebrado derruba silenciosamente a detecção de pistas (o coração atual da ferramenta) · adicionar vitest + specs dessas libs · _proposta_
+- [x] **Testes das funções puras de detecção** (M) — vitest + 30 testes em sensitive/curl/findings · _feita_
+- [ ] **CI rodando test + tsc + eslint** (P) — trava regressões automaticamente; **bloqueado pelo mesmo billing do GitHub Actions** (ver PENDENTE) — o workflow é trivial de adicionar quando o billing voltar · `.github/workflows/` · _blocked_
 
 ## ⏸️ PENDENTE (bloqueado — ação de conta, não código)
 - [ ] **Publicar imagem no GHCR** — a Action (`.github/workflows/docker.yml`) está pronta mas o **GitHub Actions está bloqueado por billing** na conta. Destravar: resolver billing (Settings → Billing) → Action publica no push → tornar o package GHCR público. Alternativa sem Actions: PAT com `write:packages` e publicar manualmente. _blocked_
