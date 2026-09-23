@@ -99,6 +99,10 @@ export function ReconDashboard() {
     () => logs.filter((l) => l.message.includes("🔎")).length,
     [logs],
   )
+  const recentClues = useMemo(
+    () => logs.filter((l) => l.message.includes("🔎")).slice(-5).reverse(),
+    [logs],
+  )
 
   const tables = useMemo(() => schema?.tables ?? [], [schema])
   const sensitiveTables = useMemo(
@@ -223,6 +227,29 @@ export function ReconDashboard() {
           )}
         </CardContent>
       </Card>
+
+      {/* Recent clues */}
+      {recentClues.length > 0 && (
+        <Card>
+          <CardContent className="space-y-2 pt-6">
+            <span className="flex items-center gap-2 text-sm font-medium">
+              <Crosshair className="size-4" />
+              Recent clues ({clueCount})
+            </span>
+            <div className="space-y-1">
+              {recentClues.map((c) => (
+                <p
+                  key={c.id}
+                  className="truncate font-mono text-xs text-warning"
+                  title={c.message}
+                >
+                  {c.message}
+                </p>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       {/* Sensitive-looking tables */}
       {sensitiveTables.length > 0 && (

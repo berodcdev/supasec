@@ -636,6 +636,35 @@ export function SupabaseProvider({ children }: { children: ReactNode }) {
   )
   const clearHistory = useCallback(() => setRequestHistory([]), [])
 
+  // Persist request history across reloads.
+  const [historyHydrated, setHistoryHydrated] = useState(false)
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem("supabase-pwn-history")
+      if (raw) {
+        const parsed = JSON.parse(raw) as Array<
+          Omit<RequestRecord, "timestamp"> & { timestamp: string }
+        >
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          setRequestHistory(
+            parsed.map((r) => ({ ...r, timestamp: new Date(r.timestamp) })),
+          )
+        }
+      }
+    } catch {
+      // ignore
+    }
+    setHistoryHydrated(true)
+  }, [])
+  useEffect(() => {
+    if (!historyHydrated) return
+    try {
+      localStorage.setItem("supabase-pwn-history", JSON.stringify(requestHistory))
+    } catch {
+      // ignore
+    }
+  }, [requestHistory, historyHydrated])
+
   // -- Persist the output log across page reloads --------------------------
   const [logsHydrated, setLogsHydrated] = useState(false)
   useEffect(() => {

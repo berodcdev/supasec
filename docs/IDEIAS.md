@@ -34,8 +34,9 @@ Ideia descartada não volta a ser sugerida; o motivo fica registrado.
 
 ## 2026-09-23 · visão geral / consistência
 - [ ] **Persistir o histórico de requests** (P) — igual ao log, hoje some no F5; salvar no localStorage · `lib/supabase-context.tsx` · _proposta_
-- [ ] **Dashboard de Recon** (M) — painel/aba inicial com o resumo da sessão (N tabelas, buckets, funções, findings/clues) e atalhos; hoje tudo espalhado nas abas · nova aba · _proposta_
+- [x] **Dashboard de Recon** (M) — aba inicial com overview + atalhos · _feita_
 - [ ] **Marcar buckets sensíveis no seletor do Storage** (P) — o 🔎 das tabelas no DB, aplicado ao dropdown de buckets · `components/supabase-pwn/storage-explorer.tsx` · _proposta_
+- [ ] **Últimas pistas no dashboard** (P) — mostrar as ~5 pistas mais recentes (não só a contagem) direto no overview · `components/supabase-pwn/recon-dashboard.tsx` · _proposta_
 
 ## ⏸️ PENDENTE (bloqueado — ação de conta, não código)
 - [ ] **Publicar imagem no GHCR** — a Action (`.github/workflows/docker.yml`) está pronta mas o **GitHub Actions está bloqueado por billing** na conta. Destravar: resolver billing (Settings → Billing) → Action publica no push → tornar o package GHCR público. Alternativa sem Actions: PAT com `write:packages` e publicar manualmente. _blocked_
