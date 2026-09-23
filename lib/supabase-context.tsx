@@ -13,6 +13,7 @@ import {
   createContext,
   useCallback,
   useContext,
+  useEffect,
   useMemo,
   useReducer,
   useRef,
@@ -114,6 +115,7 @@ type Action =
   | { type: "SET_AUTH"; payload: { user: User | null; session: Session | null } }
   | { type: "ADD_LOG"; payload: LogEntry }
   | { type: "CLEAR_LOGS" }
+  | { type: "SET_LOGS"; payload: LogEntry[] }
   | { type: "DISCONNECT" }
   | { type: "MERGE_SCHEMA"; payload: { tables: string[]; columns: SchemaInfo["columns"] } }
   | {
@@ -207,6 +209,8 @@ function reducer(state: SupabaseState, action: Action): SupabaseState {
     }
     case "CLEAR_LOGS":
       return { ...state, logs: [] }
+    case "SET_LOGS":
+      return { ...state, logs: action.payload }
     case "DISCONNECT":
       return { ...initialState, hints: { tables: [], functions: [] } }
     case "MERGE_HINTS": {
@@ -614,6 +618,46 @@ export function SupabaseProvider({ children }: { children: ReactNode }) {
     if (kind === "database") setActiveTab("database")
     else if (kind === "storage") setActiveTab("storage")
   }, [])
+
+  // -- Persist the output log across page reloads --------------------------
+  const [logsHydrated, setLogsHydrated] = useState(false)
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem("supabase-pwn-logs")
+      if (raw) {
+        const parsed = JSON.parse(raw) as Array<{
+          id: string
+          timestamp: string
+          type: LogEntry["type"]
+          message: string
+        }>
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          dispatch({
+            type: "SET_LOGS",
+            payload: parsed.map((e) => ({
+              ...e,
+              timestamp: new Date(e.timestamp),
+            })),
+          })
+        }
+      }
+    } catch {
+      // ignore corrupt/unavailable storage
+    }
+    setLogsHydrated(true)
+  }, [])
+  useEffect(() => {
+    if (!logsHydrated) return
+    try {
+      // Persist a slim copy (no `data` — may be huge / non-serializable).
+      const slim = state.logs
+        .slice(-500)
+        .map(({ id, timestamp, type, message }) => ({ id, timestamp, type, message }))
+      localStorage.setItem("supabase-pwn-logs", JSON.stringify(slim))
+    } catch {
+      // ignore
+    }
+  }, [state.logs, logsHydrated])
 
   // -- addLog -------------------------------------------------------------
   const addLog = useCallback(

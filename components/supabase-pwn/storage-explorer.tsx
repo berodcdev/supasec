@@ -32,6 +32,8 @@ import { DataTable, type Column } from "@/components/supabase-pwn/shared/data-ta
 import { StatusBadge } from "@/components/supabase-pwn/shared/status-badge"
 import { EmptyState } from "@/components/supabase-pwn/shared/empty-state"
 import { sensitiveTableHint, sensitiveFileHint } from "@/lib/sensitive"
+import { toCurl, storageUrl, restHeaders } from "@/lib/curl"
+import { CopyCurl } from "@/components/supabase-pwn/shared/copy-curl"
 
 // ---------------------------------------------------------------------------
 // Types
@@ -134,7 +136,7 @@ const fileColumns: Column<FileObject>[] = [
 // ---------------------------------------------------------------------------
 
 export function StorageExplorer() {
-  const { client, addLog, focusTarget } = useSupabase()
+  const { client, addLog, focusTarget, projectUrl, apiKey, session } = useSupabase()
 
   // -- Bucket state ---------------------------------------------------------
   const [buckets, setBuckets] = useState<BucketInfo[]>([])
@@ -730,6 +732,18 @@ export function StorageExplorer() {
                     )}
                     List
                   </Button>
+                  <CopyCurl
+                    build={() =>
+                      toCurl({
+                        method: "POST",
+                        url: storageUrl(projectUrl, `object/list/${selectedBucket}`),
+                        headers: restHeaders(apiKey, session?.access_token, {
+                          "content-type": "application/json",
+                        }),
+                        body: { prefix: listFolder.trim(), limit: listLimit },
+                      })
+                    }
+                  />
                 </div>
 
                 {files.length > 0 && (
@@ -797,18 +811,33 @@ export function StorageExplorer() {
                     onChange={(e) => setDownloadPath(e.target.value)}
                   />
                 </div>
-                <Button
-                  onClick={handleDownload}
-                  disabled={downloading}
-                  size="sm"
-                >
-                  {downloading ? (
-                    <RefreshCw className="size-3.5 animate-spin" />
-                  ) : (
-                    <Download className="size-3.5" />
-                  )}
-                  Download
-                </Button>
+                <div className="flex items-center gap-2">
+                  <Button
+                    onClick={handleDownload}
+                    disabled={downloading}
+                    size="sm"
+                  >
+                    {downloading ? (
+                      <RefreshCw className="size-3.5 animate-spin" />
+                    ) : (
+                      <Download className="size-3.5" />
+                    )}
+                    Download
+                  </Button>
+                  <CopyCurl
+                    disabled={!downloadPath.trim()}
+                    build={() =>
+                      toCurl({
+                        method: "GET",
+                        url: storageUrl(
+                          projectUrl,
+                          `object/${selectedBucket}/${downloadPath.trim()}`,
+                        ),
+                        headers: restHeaders(apiKey, session?.access_token),
+                      })
+                    }
+                  />
+                </div>
               </CardContent>
             </Card>
           </TabsContent>
@@ -865,13 +894,24 @@ export function StorageExplorer() {
                     onChange={(e) => setPublicUrlPath(e.target.value)}
                   />
                 </div>
-                <Button
-                  onClick={handleGetPublicUrl}
-                  size="sm"
-                >
-                  <Link className="size-3.5" />
-                  Get Public URL
-                </Button>
+                <div className="flex items-center gap-2">
+                  <Button onClick={handleGetPublicUrl} size="sm">
+                    <Link className="size-3.5" />
+                    Get Public URL
+                  </Button>
+                  <CopyCurl
+                    disabled={!publicUrlPath.trim()}
+                    build={() =>
+                      toCurl({
+                        method: "GET",
+                        url: storageUrl(
+                          projectUrl,
+                          `object/public/${selectedBucket}/${publicUrlPath.trim()}`,
+                        ),
+                      })
+                    }
+                  />
+                </div>
                 {publicUrl && (
                   <div className="flex items-center gap-2">
                     <Input
@@ -924,18 +964,36 @@ export function StorageExplorer() {
                     />
                   </div>
                 </div>
-                <Button
-                  onClick={handleCreateSignedUrl}
-                  disabled={creatingSignedUrl}
-                  size="sm"
-                >
-                  {creatingSignedUrl ? (
-                    <RefreshCw className="size-3.5 animate-spin" />
-                  ) : (
-                    <Link className="size-3.5" />
-                  )}
-                  Create Signed URL
-                </Button>
+                <div className="flex items-center gap-2">
+                  <Button
+                    onClick={handleCreateSignedUrl}
+                    disabled={creatingSignedUrl}
+                    size="sm"
+                  >
+                    {creatingSignedUrl ? (
+                      <RefreshCw className="size-3.5 animate-spin" />
+                    ) : (
+                      <Link className="size-3.5" />
+                    )}
+                    Create Signed URL
+                  </Button>
+                  <CopyCurl
+                    disabled={!signedUrlPath.trim()}
+                    build={() =>
+                      toCurl({
+                        method: "POST",
+                        url: storageUrl(
+                          projectUrl,
+                          `object/sign/${selectedBucket}/${signedUrlPath.trim()}`,
+                        ),
+                        headers: restHeaders(apiKey, session?.access_token, {
+                          "content-type": "application/json",
+                        }),
+                        body: { expiresIn: signedUrlExpiry },
+                      })
+                    }
+                  />
+                </div>
                 {signedUrl && (
                   <div className="flex items-center gap-2">
                     <Input
