@@ -40,11 +40,11 @@ services:
       TZ: ${TZ:-America/Sao_Paulo}
     networks:
       - traefik_proxy
+    # No custom healthcheck: `authelia healthcheck` isn't a command in 4.38, and
+    # Traefik withholds a container's routers/middlewares until it's "healthy".
+    # Disabling it lets Traefik register Authelia immediately.
     healthcheck:
-      test: ["CMD", "authelia", "healthcheck"]
-      interval: 30s
-      timeout: 5s
-      retries: 5
+      disable: true
     labels:
       - "traefik.enable=true"
       - "traefik.docker.network=traefik_proxy"
