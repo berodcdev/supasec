@@ -34,16 +34,35 @@ Inspired by [firepwn-tool](https://github.com/0xbigshaq/firepwn-tool) (Firebase 
 
 Key type is auto-detected from the prefix/JWT payload and displayed in the connection header.
 
-## Getting Started
+## Getting Started (local)
+
+One command — you only need Docker installed:
 
 ```bash
-git clone https://github.com/BobTheShoplifter/supabase-pwn.git
+git clone https://github.com/berodcdev/supabase-pwn.git
 cd supabase-pwn
+./install.sh
+```
+
+The installer checks Docker, builds the app, and serves it at
+**[http://localhost:3000](http://localhost:3000)** — bound to loopback, so it's
+reachable only from your own machine and needs no login. Enter a Supabase
+project URL + API key and hit **Initialize**.
+
+Options: `./install.sh --port 8080` · `./install.sh --yes` (no prompts) ·
+`./install.sh --update` (rebuild + restart on the latest code).
+
+### Run from source (development)
+
+```bash
 npm install
 npm run dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000), enter a Supabase project URL and API key, and hit **Initialize**.
+### Host it for a team (advanced)
+
+To expose it on a server behind a login + one-time-password, see
+[deploy/README.md](deploy/README.md).
 
 ## Usage
 
