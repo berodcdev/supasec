@@ -34,6 +34,21 @@ export function isSensitiveColumn(name: string): boolean {
   return SENSITIVE_PATTERNS.some(({ pattern }) => c.includes(pattern))
 }
 
+// Table names that, by themselves, are a lead worth flagging during discovery.
+const SENSITIVE_TABLE_PATTERNS = [
+  "user", "admin", "account", "auth", "credential", "password", "secret",
+  "token", "session", "payment", "billing", "card", "invoice", "customer",
+  "member", "profile", "wallet", "transaction", "bank", "ssn", "cpf", "cnpj",
+  "api_key", "apikey", "subscription", "license", "private", "webhook",
+]
+
+/** A human label if the table NAME itself looks sensitive, else null. */
+export function sensitiveTableHint(name: string): string | null {
+  const c = name.toLowerCase()
+  const hit = SENSITIVE_TABLE_PATTERNS.find((p) => c.includes(p))
+  return hit ?? null
+}
+
 /**
  * Given a list of column names, return the distinct human labels of the
  * sensitive kinds detected (e.g. ["email", "password"]).
