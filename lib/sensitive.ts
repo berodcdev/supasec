@@ -93,6 +93,60 @@ export const SENSITIVE_COLUMN_PROBES = [
   "stripe_customer_id", "is_admin", "role", "balance",
 ]
 
+// File names that are a lead when found in a storage bucket.
+const SENSITIVE_FILE_PATTERNS = [
+  ".env", "backup", "dump", ".sql", "id_rsa", ".pem", ".key", ".ppk",
+  "credential", "secret", "password", ".pfx", ".p12", ".bak", "private",
+  "wallet", ".kdbx", "config.json", ".htpasswd", "serviceaccount",
+]
+
+/** A human label if a file NAME looks sensitive, else null. */
+export function sensitiveFileHint(name: string): string | null {
+  const c = name.toLowerCase()
+  return SENSITIVE_FILE_PATTERNS.find((p) => c.includes(p)) ?? null
+}
+
+/** Decode a JWT payload (no verification), or null. */
+export function decodeJwtClaims(token: string): Record<string, unknown> | null {
+  try {
+    const parts = token.split(".")
+    if (parts.length !== 3) return null
+    const b64 = parts[1].replace(/-/g, "+").replace(/_/g, "/")
+    const pad = b64 + "=".repeat((4 - (b64.length % 4)) % 4)
+    const json =
+      typeof atob !== "undefined"
+        ? atob(pad)
+        : Buffer.from(pad, "base64").toString("utf8")
+    return JSON.parse(json)
+  } catch {
+    return null
+  }
+}
+
+/** Describe any JWTs embedded in a row's values (role + expiry) — leaked
+ *  service_role tokens are the crown jewels. */
+export function describeJwtsInRow(row: Record<string, unknown>): string[] {
+  const re = /eyJ[A-Za-z0-9_-]{8,}\.eyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]+/g
+  const out = new Set<string>()
+  for (const val of Object.values(row)) {
+    if (val == null) continue
+    const s = typeof val === "string" ? val : JSON.stringify(val)
+    re.lastIndex = 0
+    let m: RegExpExecArray | null
+    while ((m = re.exec(s)) !== null) {
+      const claims = decodeJwtClaims(m[0])
+      if (!claims) continue
+      const role = claims.role ? String(claims.role) : "?"
+      const exp =
+        typeof claims.exp === "number"
+          ? new Date(claims.exp * 1000).toISOString().slice(0, 10)
+          : "?"
+      out.add(`role=${role}, exp=${exp}`)
+    }
+  }
+  return [...out]
+}
+
 /**
  * Given a list of column names, return the distinct human labels of the
  * sensitive kinds detected (e.g. ["email", "password"]).

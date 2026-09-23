@@ -5,6 +5,7 @@ import {
   flagSensitiveColumns,
   flagSensitiveValues,
   sensitiveTableHint,
+  describeJwtsInRow,
   SENSITIVE_COLUMN_PROBES,
 } from "@/lib/sensitive"
 
@@ -838,6 +839,7 @@ export function SupabaseProvider({ children }: { children: ReactNode }) {
             }))
             const sensCols = flagSensitiveColumns(colNames)
             const { kinds: valKinds, hits: valHits } = flagSensitiveValues(first)
+            const jwts = valKinds.includes("JWT") ? describeJwtsInRow(first) : []
             if (sensCols.length > 0 || valKinds.length > 0) {
               // The strongest lead: readable table with PII/secret columns or
               // secret-looking values.
@@ -845,11 +847,16 @@ export function SupabaseProvider({ children }: { children: ReactNode }) {
               const parts: string[] = []
               if (sensCols.length > 0) parts.push(`sensitive columns: ${sensCols.join(", ")}`)
               if (valKinds.length > 0) parts.push(`secrets in values: ${valKinds.join(", ")}`)
+              if (jwts.length > 0) parts.push(`JWT(s): ${jwts.join(" | ")}`)
               addLog(
                 "warning",
                 `🔎 CLUE — "${r.table}" — ${parts.join("; ")} (${rows.length} row visible, ${colNames.length} cols)`,
-                { table: r.table, sensitiveColumns: sensCols, valueHits: valHits, columns: colNames, sample: first },
+                { table: r.table, sensitiveColumns: sensCols, valueHits: valHits, jwts, columns: colNames, sample: first },
               )
+              // A leaked service_role JWT is game over — shout it as an error.
+              if (jwts.some((j) => j.includes("service_role"))) {
+                addLog("error", `🔎 CRITICAL — service_role JWT leaked in "${r.table}" — full DB access`, { table: r.table })
+              }
             } else if (tableHint) {
               clues++
               addLog(

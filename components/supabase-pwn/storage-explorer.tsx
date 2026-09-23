@@ -31,7 +31,7 @@ import { Separator } from "@/components/ui/separator"
 import { DataTable, type Column } from "@/components/supabase-pwn/shared/data-table"
 import { StatusBadge } from "@/components/supabase-pwn/shared/status-badge"
 import { EmptyState } from "@/components/supabase-pwn/shared/empty-state"
-import { sensitiveTableHint } from "@/lib/sensitive"
+import { sensitiveTableHint, sensitiveFileHint } from "@/lib/sensitive"
 
 // ---------------------------------------------------------------------------
 // Types
@@ -334,6 +334,17 @@ export function StorageExplorer() {
       const fileList = (data ?? []) as FileObject[]
       setFiles(fileList)
       addLog("success", `Listed ${fileList.length} item(s)`, fileList)
+      // Flag suspicious file names as leads.
+      for (const f of fileList) {
+        const hint = sensitiveFileHint(f.name)
+        if (hint) {
+          addLog(
+            "warning",
+            `🔎 CLUE — sensitive file "${f.name}" in bucket "${selectedBucket}"`,
+            { bucket: selectedBucket, file: f.name, matched: hint },
+          )
+        }
+      }
     } catch (err) {
       addLog(
         "error",
