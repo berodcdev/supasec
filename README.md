@@ -50,7 +50,22 @@ reachable only from your own machine and needs no login. Enter a Supabase
 project URL + API key and hit **Initialize**.
 
 Options: `./install.sh --port 8080` · `./install.sh --yes` (no prompts) ·
-`./install.sh --update` (rebuild + restart on the latest code).
+`./install.sh --update` (rebuild + restart) · `./install.sh --uninstall`.
+
+### Without cloning (prebuilt image)
+
+Once the image is published (a GitHub Action builds it on every push to
+`master`), you can install on any machine with Docker in one line — no clone, no
+build:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/berodcdev/supabase-pwn/master/install.sh | bash
+```
+
+This pulls `ghcr.io/berodcdev/supabase-pwn:latest` and runs it. It needs the repo
+to be **public** (so the raw script is fetchable) and the GHCR **package to be
+public** (so the image pulls without a login). From a private setup, use the
+clone + `./install.sh` route above instead.
 
 ### Run from source (development)
 
