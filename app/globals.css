@@ -28,6 +28,8 @@
     --info-foreground: oklch(0.99 0.01 300);
     --success: oklch(0.52 0.15 162);
     --success-foreground: oklch(0.99 0.01 162);
+    --armed: oklch(0.72 0.17 72);
+    --armed-foreground: oklch(0.99 0.02 72);
     --border: oklch(0.88 0.01 265);
     --input: oklch(0.88 0.01 265);
     --ring: oklch(0.52 0.14 190);
@@ -74,6 +76,9 @@
     --info-foreground: oklch(0.98 0.02 300);
     --success: oklch(0.72 0.17 162);
     --success-foreground: oklch(0.15 0.03 162);
+    /* "Armed" accent — the primary/offensive action (blueprint amber). */
+    --armed: oklch(0.82 0.17 72);
+    --armed-foreground: oklch(0.18 0.04 72);
     --border: oklch(0.29 0.016 264);
     --input: oklch(0.26 0.015 265);
     --ring: oklch(0.8 0.15 192);
@@ -118,6 +123,8 @@
   --color-info-foreground: var(--info-foreground);
   --color-success: var(--success);
   --color-success-foreground: var(--success-foreground);
+  --color-armed: var(--armed);
+  --color-armed-foreground: var(--armed-foreground);
   --color-border: var(--border);
   --color-input: var(--input);
   --color-ring: var(--ring);
@@ -187,6 +194,29 @@
     transparent 0.5px
   );
   background-size: 22px 22px;
+}
+
+/* Blueprint grid — fine minor lines + stronger major lines, in teal. */
+@utility bg-blueprint {
+  background-color: var(--color-background);
+  background-image:
+    linear-gradient(oklch(0.8 0.15 192 / 0.045) 1px, transparent 1px),
+    linear-gradient(90deg, oklch(0.8 0.15 192 / 0.045) 1px, transparent 1px),
+    linear-gradient(oklch(0.8 0.15 192 / 0.09) 1px, transparent 1px),
+    linear-gradient(90deg, oklch(0.8 0.15 192 / 0.09) 1px, transparent 1px);
+  background-size:
+    24px 24px,
+    24px 24px,
+    120px 120px,
+    120px 120px;
+}
+
+/* Datum / registration crosshair used to frame schematic modules. */
+@utility datum-corner {
+  position: absolute;
+  width: 10px;
+  height: 10px;
+  border-color: var(--color-primary);
 }
 
 @keyframes scan-sweep {

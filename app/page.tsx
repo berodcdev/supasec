@@ -15,7 +15,7 @@ import { Realtime } from "@/components/supabase-pwn/realtime"
 import { AutoPwn } from "@/components/supabase-pwn/autopwn"
 import { OutputLog } from "@/components/supabase-pwn/output-log"
 import { ReconDashboard } from "@/components/supabase-pwn/recon-dashboard"
-import { EmptyState } from "@/components/supabase-pwn/shared/empty-state"
+import { ReticleMark } from "@/components/supabase-pwn/shared/reticle-mark"
 import {
   Tabs,
   TabsContent,
@@ -36,7 +36,7 @@ export default function Home() {
   const { initialized, activeTab, setActiveTab } = useSupabase()
 
   return (
-    <div className="flex h-screen flex-col bg-background bg-graticule text-foreground">
+    <div className="flex h-screen flex-col bg-background bg-blueprint text-foreground">
       <Header />
       <InitForm />
       <ResizablePanelGroup orientation="vertical" className="flex-1 min-h-0">
@@ -113,11 +113,16 @@ export default function Home() {
                   </TabsContent>
                 </Tabs>
               ) : (
-                <div className="flex h-full items-center justify-center">
-                  <EmptyState
-                    icon={ShieldAlert}
-                    title="Initialize a Supabase project to get started"
-                  />
+                <div className="flex h-full flex-col items-center justify-center gap-4">
+                  <ReticleMark className="size-16 text-primary/20" />
+                  <div className="text-center">
+                    <p className="font-mono text-xs uppercase tracking-[0.3em] text-muted-foreground">
+                      No target acquired
+                    </p>
+                    <p className="mt-1 text-sm text-muted-foreground/60">
+                      Initialize a Supabase project to begin recon.
+                    </p>
+                  </div>
                 </div>
               )}
             </ResizablePanel>
@@ -126,8 +131,11 @@ export default function Home() {
               {initialized ? (
                 <AuthPanel />
               ) : (
-                <div className="flex h-full items-center justify-center">
-                  <EmptyState title="Auth panel" />
+                <div className="flex h-full flex-col items-center justify-center gap-2">
+                  <ReticleMark className="size-10 text-primary/15" />
+                  <p className="font-mono text-[10px] uppercase tracking-[0.3em] text-muted-foreground">
+                    Auth module · standby
+                  </p>
                 </div>
               )}
             </ResizablePanel>
