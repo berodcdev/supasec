@@ -1,0 +1,63 @@
+# Deploy for a host that ALREADY runs Traefik v3 (entrypoints web/websecure,
+# cert resolver "le", external network "traefik_proxy", exposedbydefault=false).
+# The app and Authelia join the existing traefik_proxy network and are routed by
+# labels — no second proxy, no host ports, nothing else on the box is touched.
+#
+#   docker compose -f docker-compose.srv1.yml up -d --build
+#
+# Requires .env.prod (secrets) and a real password hash in
+# deploy/authelia/users_database.yml — see deploy/README.md.
+
+services:
+  supabase-pwn:
+    build: .
+    image: supabase-pwn:latest
+    container_name: supabase-pwn
+    restart: unless-stopped
+    environment:
+      NODE_ENV: production
+      NEXT_TELEMETRY_DISABLED: "1"
+    networks:
+      - traefik_proxy
+    labels:
+      - "traefik.enable=true"
+      - "traefik.docker.network=traefik_proxy"
+      - "traefik.http.routers.supasec.rule=Host(`supasec.nodetp.com.br`)"
+      - "traefik.http.routers.supasec.entrypoints=websecure"
+      - "traefik.http.routers.supasec.tls.certresolver=le"
+      - "traefik.http.routers.supasec.middlewares=authelia@docker"
+      - "traefik.http.services.supasec.loadbalancer.server.port=3000"
+
+  authelia:
+    image: authelia/authelia:4.38
+    container_name: authelia
+    restart: unless-stopped
+    volumes:
+      - ./deploy/authelia:/config
+    env_file:
+      - .env.prod
+    environment:
+      TZ: ${TZ:-America/Sao_Paulo}
+    networks:
+      - traefik_proxy
+    healthcheck:
+      test: ["CMD", "authelia", "healthcheck"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+    labels:
+      - "traefik.enable=true"
+      - "traefik.docker.network=traefik_proxy"
+      # Portal router (NOT protected by the forward-auth middleware).
+      - "traefik.http.routers.authelia.rule=Host(`auth.supasec.nodetp.com.br`)"
+      - "traefik.http.routers.authelia.entrypoints=websecure"
+      - "traefik.http.routers.authelia.tls.certresolver=le"
+      - "traefik.http.services.authelia.loadbalancer.server.port=9091"
+      # The forward-auth middleware other routers reference as authelia@docker.
+      - "traefik.http.middlewares.authelia.forwardauth.address=http://authelia:9091/api/authz/forward-auth"
+      - "traefik.http.middlewares.authelia.forwardauth.trustForwardHeader=true"
+      - "traefik.http.middlewares.authelia.forwardauth.authResponseHeaders=Remote-User,Remote-Groups,Remote-Name,Remote-Email"
+
+networks:
+  traefik_proxy:
+    external: true
