@@ -628,6 +628,11 @@ export function StorageExplorer() {
                           {b.public ? "public" : "private"}
                         </StatusBadge>
                       )}
+                      {sensitiveTableHint(b.name) && (
+                        <StatusBadge severity="critical" dot={false} title="Sensitive-looking bucket">
+                          🔎
+                        </StatusBadge>
+                      )}
                     </span>
                   </SelectItem>
                 ))}
