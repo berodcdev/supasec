@@ -1,6 +1,6 @@
 "use client"
 
-import { Github, Power } from "lucide-react"
+import { Command, Power } from "lucide-react"
 
 import { useSupabase } from "@/lib/supabase-context"
 import { ReticleMark } from "@/components/supabase-pwn/shared/reticle-mark"
@@ -102,15 +102,13 @@ export function Header() {
               <span className="hidden sm:inline">Disconnect</span>
             </button>
           )}
-          <a
-            href="https://github.com/berodcdev/supabase-pwn"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="flex items-center gap-1.5 border-l border-border px-4 font-mono text-[10px] uppercase tracking-widest text-muted-foreground transition-colors hover:text-primary"
+          <div
+            className="flex items-center gap-1.5 border-l border-border px-4 font-mono text-[10px] uppercase tracking-widest text-muted-foreground"
+            title="⌘K to open command palette"
           >
-            <Github className="h-3.5 w-3.5" />
-            <span className="hidden sm:inline">GitHub</span>
-          </a>
+            <Command className="h-3 w-3" />
+            <span className="hidden sm:inline">⌘K</span>
+          </div>
         </div>
       </div>
     </header>
