@@ -55,14 +55,14 @@ Consistência & clareza:
 - [x] **Retículo nos focos que faltam** (P) — bucket (storage) e canal (realtime) · _feita_
 
 Ferramenta pro:
-- [ ] **Command palette ⌘K** (M) — pular abas, conectar, run scan, focar tabela; cara de instrumento sério · nova peça · _proposta_
+- [x] **Command palette ⌘K** (M) — pular abas, conectar, run scan, focar tabela; cara de instrumento sério · _feita_
 - [ ] **JSON colapsável** (M) — nós recolhíveis + copiar por nó no JsonViewer (payloads grandes) · `shared/json-viewer.tsx` · _proposta_
 
 ## 2026-09-24 · backlog de FEATURES
 Assessment Supabase-specific (maior valor):
-- [ ] **Relationship traversal / embedding** (M) — usar o embedding do PostgREST (`select=*,related(*)`) pra pivotar de uma tabela legível para dados de tabelas bloqueadas; sugerir pivôs a partir do schema/FKs · database-explorer · _proposta_
-- [ ] **Analisador de políticas RLS** (M) — transformar as policies importadas em findings com severidade (USING true, sem WITH CHECK, checagem de role fraca); hoje só há um aviso simples · database-explorer + findings · _proposta_
-- [ ] **Teste de mass-assignment / escalonamento** (P-M) — no INSERT/UPDATE, injetar campos sensíveis (`role`, `is_admin`, `user_id`, `tenant_id`) e detectar se a policy deixa escalar; reusa o auto-fill · database-explorer · _proposta_
+- [x] **Relationship traversal / embedding** (M) — seletor "Embed" no SELECT anexa `,<tabela>(*)` · _feita_
+- [x] **Analisador de políticas RLS** (M) — `lib/rls.ts`; badge de severidade + fraquezas por policy · _feita_
+- [x] **Teste de mass-assignment / escalonamento** (P-M) — botão Escalate + detecção de CLUE no INSERT · _feita_
 - [ ] **Probing de pg_graphql** (M) — Supabase expõe `/graphql/v1`; introspection + queries revelam superfície que o REST às vezes esconde · nova aba/peça · _proposta_
 
 Cobertura & workflow:
@@ -129,3 +129,14 @@ Cobertura & workflow:
 - [x] **Corrigir o único erro de tsc** (P) — tipado `r.data` em `lib/supabase-context.tsx`; junto zeramos tsc e eslint · _feita_
 - [ ] **Configurar allowedDevOrigins** (P) — você acessa por IP público (54.232.189.113); o Next já loga o aviso de cross-origin e uma major futura vai bloquear `/_next/*` · `next.config.ts` · _proposta_
 - [ ] **Unificar domínio do probe email** (P) — o commit recente padronizou em `@iapapi.com`, mas `database-explorer.tsx:70` ainda usa `@j5.no`; 2 domínios hardcoded em 2 arquivos · `components/supabase-pwn/database-explorer.tsx` · _proposta_
+
+## 2026-09-24 · a partir de "GraphQL Explorer + AI Analysis + Ask AI per finding"
+- [x] **Probing de pg_graphql** (M) — aba GraphQL com introspection, schema browser, query editor e security findings · _feita_
+- [ ] **Realtime sweep no AutoPwn** (M) — testar `postgres_changes` em todas as tabelas descobertas; hoje 0 cobertura de realtime no scan automático, mas a aba manual já tem 6 referências ao protocolo · `components/supabase-pwn/autopwn.tsx`, `realtime.tsx` · _proposta_
+- [ ] **GraphQL findings no AutoPwn** (M) — integrar o probing de `/graphql/v1` no scan automático (introspection + mutations expostas viram findings); hoje 0 referências a GraphQL no autopwn · `components/supabase-pwn/autopwn.tsx`, `graphql-explorer.tsx` · _proposta_
+- [ ] **Report HTML/PDF exportável** (G) — gerar relatório consolidado estilo pentest (executive summary AI + findings + PoCs + remediations) como HTML bonito ou PDF; hoje só há export .md no AI panel e no log · `components/supabase-pwn/ai-analysis.tsx` · _proposta_
+
+## 2026-09-24 · a partir de "Configuração visual premium de OpenRouter API"
+- [x] **Dialog visual premium de OpenRouter** (M) — model cards com tiers, test de conexão, show/hide key, recomendações · _feita_
+- [x] **Realtime sweep no AutoPwn** (M) — teste de postgres_changes em todas as tabelas, findings de bypass RLS · _feita_
+- [x] **GraphQL findings no AutoPwn** (M) — introspection + INSERT/DELETE mutations integradas no scan automático · _feita_

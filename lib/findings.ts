@@ -11,7 +11,7 @@ import {
 
 export type FindingSeverity = "critical" | "high" | "medium" | "low" | "info"
 
-export type FindingCategory = "database" | "storage" | "auth" | "functions"
+export type FindingCategory = "database" | "storage" | "auth" | "functions" | "realtime" | "graphql"
 
 export type Finding = {
   id: string
@@ -188,6 +188,77 @@ export function deriveFindings(record: ScanRecord): Finding[] {
         remediation:
           "Confirm the function verifies auth/JWT and validates input; deployment alone is not a vuln.",
       })
+    }
+  }
+
+  // -- GraphQL --------------------------------------------------------------
+  if (record.graphql?.available) {
+    const gql = record.graphql
+    findings.push({
+      id: "gql-introspection",
+      severity: anon ? "high" : "medium",
+      category: "graphql",
+      title: "GraphQL introspection enabled",
+      evidence: `The /graphql/v1 endpoint responds to introspection and exposes ${gql.types ?? 0} types, ${gql.queries ?? 0} queries, ${gql.mutations ?? 0} mutations. ${povNote}.`,
+      remediation:
+        "Disable introspection in production or restrict the GraphQL endpoint with RLS policies.",
+    })
+
+    if (gql.insertMutations && gql.insertMutations.length > 0) {
+      findings.push({
+        id: "gql-insert-mutations",
+        severity: anon ? "critical" : "high",
+        category: "graphql",
+        title: `${gql.insertMutations.length} INSERT mutation(s) via GraphQL`,
+        evidence: `Tables writable via GraphQL: ${gql.insertMutations.join(", ")}. ${povNote}.`,
+        remediation:
+          "Verify RLS policies block unauthorized writes through both REST and GraphQL paths.",
+      })
+    }
+
+    if (gql.deleteMutations && gql.deleteMutations.length > 0) {
+      findings.push({
+        id: "gql-delete-mutations",
+        severity: anon ? "critical" : "high",
+        category: "graphql",
+        title: `${gql.deleteMutations.length} DELETE mutation(s) via GraphQL`,
+        evidence: `Tables deletable via GraphQL: ${gql.deleteMutations.join(", ")}. ${povNote}.`,
+        remediation:
+          "Verify RLS policies block unauthorized deletes through both REST and GraphQL paths.",
+      })
+    }
+  }
+
+  // -- Realtime -------------------------------------------------------------
+  if (record.realtime && record.realtime.length > 0) {
+    const subscribable = record.realtime.filter((r) => r.subscribed)
+    if (subscribable.length > 0) {
+      const dbExposed = new Set(
+        record.db.filter((r) => r.select === "allowed").map((r) => r.name),
+      )
+      const realtimeOnly = subscribable.filter((r) => !dbExposed.has(r.table))
+
+      findings.push({
+        id: "rt-subscribe-open",
+        severity: anon ? "high" : "medium",
+        category: "realtime",
+        title: `Realtime subscription open on ${subscribable.length} table(s)`,
+        evidence: `Tables accepting postgres_changes subscribe: ${subscribable.map((r) => r.table).join(", ")}. ${povNote}.`,
+        remediation:
+          "Add Realtime authorization policies (Dashboard → Realtime → Policies) or disable Realtime on tables that don't need it.",
+      })
+
+      if (realtimeOnly.length > 0) {
+        findings.push({
+          id: "rt-bypass-rls",
+          severity: "critical",
+          category: "realtime",
+          title: `Realtime leaks ${realtimeOnly.length} table(s) blocked by RLS on REST`,
+          evidence: `These tables are NOT readable via REST/PostgREST but accept Realtime subscriptions: ${realtimeOnly.map((r) => r.table).join(", ")}. An attacker can subscribe and wait for changes to leak data.`,
+          remediation:
+            "This is a serious bypass — add Realtime authorization policies for these tables immediately, or disable Realtime on them.",
+        })
+      }
     }
   }
 

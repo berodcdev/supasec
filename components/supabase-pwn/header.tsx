@@ -103,7 +103,7 @@ export function Header() {
             </button>
           )}
           <a
-            href="https://github.com/BobTheShoplifter/supabase-pwn"
+            href="https://github.com/berodcdev/supabase-pwn"
             target="_blank"
             rel="noopener noreferrer"
             className="flex items-center gap-1.5 border-l border-border px-4 font-mono text-[10px] uppercase tracking-widest text-muted-foreground transition-colors hover:text-primary"

@@ -14,6 +14,8 @@ import {
   Database,
   HardDrive,
   Key,
+  Radio,
+  Waypoints,
   Zap,
   Download,
   History,
@@ -35,10 +37,12 @@ import {
   saveScan,
   type ScanDiff,
   type ScanRecord,
+  type StoredGraphqlResult,
 } from "@/lib/scan-history"
 import {
   downloadFile,
   formatMarkdownReport,
+  formatHtmlReport,
   reportFilenameBase,
 } from "@/lib/scan-report"
 import { Button } from "@/components/ui/button"
@@ -77,6 +81,7 @@ import {
   type FindingSeverity,
 } from "@/lib/findings"
 import { isSensitiveColumn } from "@/lib/sensitive"
+import { AIAnalysisPanel, AskAIFindingButton } from "@/components/supabase-pwn/ai-analysis"
 
 // ---------------------------------------------------------------------------
 // Types
@@ -128,6 +133,8 @@ type ScanPhase =
   | "storage"
   | "auth"
   | "functions"
+  | "realtime"
+  | "graphql"
   | "complete"
 
 type ScanConfig = {
@@ -135,6 +142,8 @@ type ScanConfig = {
   storageScan: boolean
   authProbing: boolean
   edgeFunctions: boolean
+  realtimeSweep: boolean
+  graphqlProbe: boolean
   concurrency: number
   writeTesting: boolean
   customTables: string
@@ -265,6 +274,8 @@ const SCAN_PRESETS: {
       storageScan: true,
       authProbing: false,
       edgeFunctions: false,
+      realtimeSweep: false,
+      graphqlProbe: false,
       writeTesting: false,
       useBuiltinTableWordlist: false,
       useJsHints: true,
@@ -274,12 +285,14 @@ const SCAN_PRESETS: {
   {
     key: "deep",
     label: "Deep",
-    hint: "Everything + wordlist",
+    hint: "Everything + wordlist + realtime + graphql",
     config: {
       databaseRls: true,
       storageScan: true,
       authProbing: true,
       edgeFunctions: true,
+      realtimeSweep: true,
+      graphqlProbe: true,
       writeTesting: false,
       useBuiltinTableWordlist: true,
       useJsHints: true,
@@ -295,6 +308,8 @@ const SCAN_PRESETS: {
       storageScan: true,
       authProbing: false,
       edgeFunctions: true,
+      realtimeSweep: true,
+      graphqlProbe: true,
       writeTesting: false,
       useBuiltinTableWordlist: true,
       useJsHints: true,
@@ -314,6 +329,8 @@ const PHASE_STEPS: {
   { key: "storage", label: "STORAGE", enabled: (c) => c.storageScan },
   { key: "auth", label: "AUTH", enabled: (c) => c.authProbing },
   { key: "functions", label: "EDGE", enabled: (c) => c.edgeFunctions },
+  { key: "realtime", label: "RT", enabled: (c) => c.realtimeSweep },
+  { key: "graphql", label: "GQL", enabled: (c) => c.graphqlProbe },
 ]
 const PHASE_ORDER: ScanPhase[] = [
   "idle",
@@ -322,8 +339,12 @@ const PHASE_ORDER: ScanPhase[] = [
   "storage",
   "auth",
   "functions",
+  "realtime",
+  "graphql",
   "complete",
 ]
+
+const GQL_INTROSPECTION_QUERY = `{ __schema { queryType { name } mutationType { name } types { name kind fields { name type { name kind ofType { name kind } } args { name type { name kind ofType { name kind } } } } } } }`
 
 // Finding severity → StatusBadge severity (StatusBadge has no "medium"/"low").
 const FINDING_BADGE: Record<FindingSeverity, Severity> = {
@@ -347,6 +368,8 @@ export function AutoPwn() {
     storageScan: true,
     authProbing: true,
     edgeFunctions: false,
+    realtimeSweep: true,
+    graphqlProbe: true,
     concurrency: 10,
     writeTesting: false,
     customTables: "",
@@ -382,11 +405,15 @@ export function AutoPwn() {
   const [progressLabel, setProgressLabel] = useState("")
   const [currentItem, setCurrentItem] = useState("")
 
+  type RealtimeResult = { table: string; subscribed: boolean; error?: string }
+
   // -- Results state --------------------------------------------------------
   const [dbResults, setDbResults] = useState<ScanResult[]>([])
   const [storageResults, setStorageResults] = useState<StorageResult[]>([])
   const [authResults, setAuthResults] = useState<AuthResult[]>([])
   const [functionResults, setFunctionResults] = useState<FunctionResult[]>([])
+  const [realtimeResults, setRealtimeResults] = useState<RealtimeResult[]>([])
+  const [graphqlResult, setGraphqlResult] = useState<StoredGraphqlResult | null>(null)
 
   // -- Abort ref ------------------------------------------------------------
   const abortRef = useRef<AbortSignal>({ aborted: false })
@@ -407,6 +434,8 @@ export function AutoPwn() {
     if (config.storageScan) weights.push({ phase: "storage", weight: 20 })
     if (config.authProbing) weights.push({ phase: "auth", weight: 10 })
     if (config.edgeFunctions) weights.push({ phase: "functions", weight: 15 })
+    if (config.realtimeSweep) weights.push({ phase: "realtime", weight: 10 })
+    if (config.graphqlProbe) weights.push({ phase: "graphql", weight: 5 })
     return weights
   }, [config])
 
@@ -972,6 +1001,157 @@ export function AutoPwn() {
     setProgress(calculateProgress("functions", 100))
   }, [client, projectUrl, apiKey, config.concurrency, config.useJsHints, hints.functions, addLog, calculateProgress])
 
+  // -- Phase 6: Realtime Sweep ----------------------------------------------
+  const runRealtimeSweep = useCallback(async () => {
+    if (!client || !schema) return
+
+    setPhase("realtime")
+    setProgressLabel("Realtime Sweep")
+
+    const tables = schema.tables
+    const results: RealtimeResult[] = []
+    const total = tables.length
+
+    addLog("info", `Realtime: testing postgres_changes on ${total} table(s)`)
+
+    for (let i = 0; i < total; i++) {
+      if (abortRef.current.aborted) break
+      const table = tables[i]
+      setCurrentItem(`Testing realtime: ${table} (${i + 1}/${total})`)
+      setProgress(calculateProgress("realtime", (i / total) * 100))
+
+      try {
+        const subscribed = await new Promise<boolean>((resolve) => {
+          const timeout = setTimeout(() => {
+            try { channel.unsubscribe() } catch { /* ignore */ }
+            resolve(false)
+          }, 3000)
+
+          const channel = client.channel(`pwn-rt-probe-${table}-${Date.now()}`)
+          channel
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            .on("postgres_changes" as any, { event: "*", schema: "public", table } as any, () => {})
+            .subscribe((status) => {
+              clearTimeout(timeout)
+              if (status === "SUBSCRIBED") {
+                resolve(true)
+                setTimeout(() => { try { channel.unsubscribe() } catch { /* ignore */ } }, 200)
+              } else if (status === "CHANNEL_ERROR" || status === "TIMED_OUT") {
+                resolve(false)
+                try { channel.unsubscribe() } catch { /* ignore */ }
+              }
+            })
+        })
+
+        results.push({ table, subscribed })
+        if (subscribed) {
+          addLog("warning", `Realtime: ${table} — subscription ACCEPTED`)
+        }
+      } catch {
+        results.push({ table, subscribed: false, error: "exception" })
+      }
+    }
+
+    setRealtimeResults(results)
+
+    const subscribedCount = results.filter((r) => r.subscribed).length
+    addLog(
+      subscribedCount > 0 ? "warning" : "info",
+      `Realtime: ${subscribedCount}/${results.length} table(s) accept subscriptions`,
+    )
+
+    setProgress(calculateProgress("realtime", 100))
+  }, [client, schema, addLog, calculateProgress])
+
+  // -- Phase 7: GraphQL Probing ---------------------------------------------
+  const runGraphqlProbe = useCallback(async () => {
+    if (!projectUrl || !apiKey) return
+
+    setPhase("graphql")
+    setProgressLabel("GraphQL Probing")
+    setCurrentItem("Introspecting /graphql/v1")
+
+    addLog("info", "GraphQL: probing /graphql/v1 endpoint")
+
+    const url = `${projectUrl.replace(/\/$/, "")}/graphql/v1`
+    const hdrs = {
+      apikey: apiKey,
+      Authorization: `Bearer ${apiKey}`,
+      "Content-Type": "application/json",
+    }
+
+    try {
+      const res = await fetch(url, {
+        method: "POST",
+        headers: hdrs,
+        body: JSON.stringify({ query: GQL_INTROSPECTION_QUERY }),
+      })
+
+      if (!res.ok) {
+        if (res.status === 404) {
+          addLog("info", "GraphQL: endpoint not available (404)")
+          setGraphqlResult({ available: false, error: "404 — pg_graphql not enabled" })
+        } else {
+          addLog("warning", `GraphQL: HTTP ${res.status}`)
+          setGraphqlResult({ available: false, error: `HTTP ${res.status}` })
+        }
+        setProgress(calculateProgress("graphql", 100))
+        return
+      }
+
+      const json = await res.json()
+      if (json.errors || !json.data?.__schema) {
+        addLog("info", "GraphQL: introspection blocked or returned errors")
+        setGraphqlResult({ available: false, error: json.errors?.[0]?.message ?? "Introspection blocked" })
+        setProgress(calculateProgress("graphql", 100))
+        return
+      }
+
+      const schema = json.data.__schema as {
+        queryType?: { name: string } | null
+        mutationType?: { name: string } | null
+        types: { name: string; kind: string; fields?: { name: string }[] | null }[]
+      }
+
+      const queryTypeName = schema.queryType?.name ?? "Query"
+      const mutationTypeName = schema.mutationType?.name ?? "Mutation"
+
+      const userTypes = schema.types.filter((t) => !t.name.startsWith("__") && t.kind !== "SCALAR" && t.kind !== "ENUM" && t.kind !== "INPUT_OBJECT")
+      const queryType = schema.types.find((t) => t.name === queryTypeName)
+      const mutationType = schema.types.find((t) => t.name === mutationTypeName)
+      const queryCount = queryType?.fields?.length ?? 0
+      const mutationCount = mutationType?.fields?.length ?? 0
+
+      const insertMutations = (mutationType?.fields ?? [])
+        .filter((f) => f.name.startsWith("insertInto"))
+        .map((f) => f.name.replace("insertInto", "").replace("Collection", ""))
+      const deleteMutations = (mutationType?.fields ?? [])
+        .filter((f) => f.name.startsWith("deleteFrom"))
+        .map((f) => f.name.replace("deleteFrom", "").replace("Collection", ""))
+
+      const result: StoredGraphqlResult = {
+        available: true,
+        types: userTypes.length,
+        queries: queryCount,
+        mutations: mutationCount,
+        insertMutations: insertMutations.length > 0 ? insertMutations : undefined,
+        deleteMutations: deleteMutations.length > 0 ? deleteMutations : undefined,
+      }
+      setGraphqlResult(result)
+
+      addLog(
+        mutationCount > 0 ? "warning" : "success",
+        `GraphQL: ${userTypes.length} types, ${queryCount} queries, ${mutationCount} mutations`,
+      )
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err)
+      addLog("error", `GraphQL: probe error — ${msg}`)
+      setGraphqlResult({ available: false, error: msg })
+    }
+
+    setProgress(calculateProgress("graphql", 100))
+  }, [projectUrl, apiKey, addLog, calculateProgress])
+
   // =========================================================================
   // Start / Abort
   // =========================================================================
@@ -987,6 +1167,8 @@ export function AutoPwn() {
     setStorageResults([])
     setAuthResults([])
     setFunctionResults([])
+    setRealtimeResults([])
+    setGraphqlResult(null)
     setLatestScan(null)
     setDiff(null)
     // Capture the previous scan once at the start of this run, so the diff
@@ -1025,6 +1207,18 @@ export function AutoPwn() {
         if (abortRef.current.aborted) throw new Error("Aborted")
       }
 
+      // Phase 6: Realtime Sweep
+      if (config.realtimeSweep) {
+        await runRealtimeSweep()
+        if (abortRef.current.aborted) throw new Error("Aborted")
+      }
+
+      // Phase 7: GraphQL Probing
+      if (config.graphqlProbe) {
+        await runGraphqlProbe()
+        if (abortRef.current.aborted) throw new Error("Aborted")
+      }
+
       setPhase("complete")
       setProgress(100)
       setProgressLabel("Scan Complete")
@@ -1057,6 +1251,8 @@ export function AutoPwn() {
     runStorageScan,
     runAuthProbing,
     runEdgeFunctionDiscovery,
+    runRealtimeSweep,
+    runGraphqlProbe,
   ])
 
   // Auto-start when another component asks for a scan (auto-scan on connect /
@@ -1088,6 +1284,8 @@ export function AutoPwn() {
       storage: storageResults,
       auth: authResults,
       functions: functionResults,
+      realtime: realtimeResults.length > 0 ? realtimeResults : undefined,
+      graphql: graphqlResult ?? undefined,
     }
     saveScan(record)
     setLatestScan(record)
@@ -1120,6 +1318,8 @@ export function AutoPwn() {
     storageResults,
     authResults,
     functionResults,
+    realtimeResults,
+    graphqlResult,
     previousScan,
     latestScan,
     addLog,
@@ -1138,6 +1338,8 @@ export function AutoPwn() {
       storage: storageResults,
       auth: authResults,
       functions: functionResults,
+      realtime: realtimeResults.length > 0 ? realtimeResults : undefined,
+      graphql: graphqlResult ?? undefined,
     }
   }, [
     latestScan,
@@ -1148,6 +1350,8 @@ export function AutoPwn() {
     storageResults,
     authResults,
     functionResults,
+    realtimeResults,
+    graphqlResult,
   ])
 
   // Prioritized findings derived from the completed scan.
@@ -1185,6 +1389,12 @@ export function AutoPwn() {
       json,
       "application/json",
     )
+  }, [exportableScan])
+
+  const handleExportHtml = useCallback(() => {
+    if (!exportableScan) return
+    const html = formatHtmlReport(exportableScan)
+    downloadFile(`${reportFilenameBase(exportableScan)}.html`, html, "text/html")
   }, [exportableScan])
 
   const handleAbort = useCallback(() => {
@@ -1235,6 +1445,8 @@ export function AutoPwn() {
     authTotal: authResults.length,
     functionsFound: functionResults.filter((r) => r.status === "found").length,
     functionsTotal: functionResults.length,
+    realtimeOpen: realtimeResults.filter((r) => r.subscribed).length,
+    realtimeTotal: realtimeResults.length,
   }
 
   // =========================================================================
@@ -1460,6 +1672,36 @@ export function AutoPwn() {
                 id="toggle-functions"
                 checked={config.edgeFunctions}
                 onCheckedChange={(v) => updateConfig("edgeFunctions", v)}
+                disabled={scanning}
+              />
+            </div>
+
+            <div className="flex items-center justify-between rounded-md border px-3 py-2">
+              <div className="flex items-center gap-2">
+                <Radio className="size-4 text-muted-foreground" />
+                <Label htmlFor="toggle-realtime" className="cursor-pointer">
+                  Realtime Sweep
+                </Label>
+              </div>
+              <Switch
+                id="toggle-realtime"
+                checked={config.realtimeSweep}
+                onCheckedChange={(v) => updateConfig("realtimeSweep", v)}
+                disabled={scanning}
+              />
+            </div>
+
+            <div className="flex items-center justify-between rounded-md border px-3 py-2">
+              <div className="flex items-center gap-2">
+                <Waypoints className="size-4 text-muted-foreground" />
+                <Label htmlFor="toggle-graphql" className="cursor-pointer">
+                  GraphQL Probing
+                </Label>
+              </div>
+              <Switch
+                id="toggle-graphql"
+                checked={config.graphqlProbe}
+                onCheckedChange={(v) => updateConfig("graphqlProbe", v)}
                 disabled={scanning}
               />
             </div>
@@ -1692,6 +1934,16 @@ export function AutoPwn() {
                 <Button
                   size="sm"
                   variant="outline"
+                  onClick={handleExportHtml}
+                  disabled={!exportableScan}
+                  className="gap-1.5"
+                >
+                  <Download className="size-3.5" />
+                  HTML
+                </Button>
+                <Button
+                  size="sm"
+                  variant="outline"
                   onClick={handleExportJson}
                   disabled={!exportableScan}
                   className="gap-1.5"
@@ -1814,7 +2066,8 @@ export function AutoPwn() {
                   >
                     {f.severity}
                   </SeverityBadge>
-                  <span className="text-sm font-medium">{f.title}</span>
+                  <span className="flex-1 text-sm font-medium">{f.title}</span>
+                  <AskAIFindingButton finding={f} scanRecord={exportableScan} />
                 </div>
                 <p className="text-xs text-muted-foreground">
                   <span className="text-foreground/70">Evidence:</span>{" "}
@@ -1829,6 +2082,13 @@ export function AutoPwn() {
             })}
           </CardContent>
         </Card>
+      )}
+
+      {/* ------------------------------------------------------------------- */}
+      {/* AI Analysis                                                          */}
+      {/* ------------------------------------------------------------------- */}
+      {phase === "complete" && findings.length > 0 && (
+        <AIAnalysisPanel scanRecord={exportableScan} findings={findings} />
       )}
 
       {/* ------------------------------------------------------------------- */}
@@ -2262,6 +2522,107 @@ export function AutoPwn() {
                       rows={functionResults}
                       getRowKey={(r) => r.name}
                     />
+                  </ResultSection>
+                </>
+              )}
+
+              {/* ----------------------------------------------------------- */}
+              {/* Realtime Sweep Results                                       */}
+              {/* ----------------------------------------------------------- */}
+              {realtimeResults.length > 0 && (
+                <>
+                  <Separator />
+                  <ResultSection
+                    title="Realtime Sweep"
+                    icon={Radio}
+                    count={realtimeResults.filter((r) => r.subscribed).length}
+                  >
+                    <DataTable<RealtimeResult>
+                      columns={[
+                        {
+                          key: "table",
+                          header: "Table",
+                          align: "left",
+                          className: "font-mono text-xs",
+                          cell: (r) => (
+                            <span className="block truncate" title={r.table}>
+                              {r.table}
+                            </span>
+                          ),
+                        },
+                        {
+                          key: "subscribed",
+                          header: "Subscribe",
+                          align: "center",
+                          cell: (r) => (
+                            <SeverityBadge
+                              severity={r.subscribed ? "critical" : "safe"}
+                              dot={false}
+                              className="text-[9px]"
+                            >
+                              {r.subscribed ? "OPEN" : "denied"}
+                            </SeverityBadge>
+                          ),
+                        },
+                      ]}
+                      rows={realtimeResults}
+                      getRowKey={(r) => r.table}
+                    />
+                  </ResultSection>
+                </>
+              )}
+
+              {/* ----------------------------------------------------------- */}
+              {/* GraphQL Probe Results                                        */}
+              {/* ----------------------------------------------------------- */}
+              {graphqlResult && (
+                <>
+                  <Separator />
+                  <ResultSection
+                    title="GraphQL Probe"
+                    icon={Waypoints}
+                    count={graphqlResult.available ? (graphqlResult.mutations ?? 0) : 0}
+                  >
+                    {graphqlResult.available ? (
+                      <div className="space-y-2 px-3 py-2">
+                        <div className="flex flex-wrap gap-3">
+                          <div className="flex items-center gap-1.5">
+                            <SeverityBadge severity="critical" dot={false} className="text-[9px]">
+                              INTROSPECTION OPEN
+                            </SeverityBadge>
+                          </div>
+                          <span className="font-mono text-[10px] text-muted-foreground">
+                            {graphqlResult.types} types · {graphqlResult.queries} queries · {graphqlResult.mutations} mutations
+                          </span>
+                        </div>
+                        {graphqlResult.insertMutations && graphqlResult.insertMutations.length > 0 && (
+                          <div className="flex items-start gap-2">
+                            <SeverityBadge severity="critical" dot={false} className="shrink-0 text-[8px]">
+                              INSERT
+                            </SeverityBadge>
+                            <span className="font-mono text-[10px] text-muted-foreground">
+                              {graphqlResult.insertMutations.join(", ")}
+                            </span>
+                          </div>
+                        )}
+                        {graphqlResult.deleteMutations && graphqlResult.deleteMutations.length > 0 && (
+                          <div className="flex items-start gap-2">
+                            <SeverityBadge severity="critical" dot={false} className="shrink-0 text-[8px]">
+                              DELETE
+                            </SeverityBadge>
+                            <span className="font-mono text-[10px] text-muted-foreground">
+                              {graphqlResult.deleteMutations.join(", ")}
+                            </span>
+                          </div>
+                        )}
+                      </div>
+                    ) : (
+                      <div className="px-3 py-2">
+                        <span className="font-mono text-[10px] text-muted-foreground">
+                          {graphqlResult.error ?? "Not available"}
+                        </span>
+                      </div>
+                    )}
                   </ResultSection>
                 </>
               )}

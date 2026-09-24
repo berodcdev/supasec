@@ -8,6 +8,7 @@ import {
   KeyRound,
   Radio,
   ShieldAlert,
+  Waypoints,
   Zap,
 } from "lucide-react"
 
@@ -21,6 +22,7 @@ const NAV: { id: string; label: string; icon: LucideIcon }[] = [
   { id: "functions", label: "Edge", icon: Zap },
   { id: "realtime", label: "Realtime", icon: Radio },
   { id: "auth", label: "Auth", icon: KeyRound },
+  { id: "graphql", label: "GraphQL", icon: Waypoints },
   { id: "autopwn", label: "AutoPwn", icon: ShieldAlert },
 ]
 
