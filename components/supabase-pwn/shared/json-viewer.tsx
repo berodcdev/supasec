@@ -1,111 +1,244 @@
 "use client"
 
 import * as React from "react"
-import { Highlight, type PrismTheme } from "prism-react-renderer"
-import { Check, Copy } from "lucide-react"
+import { Check, ChevronRight, Copy } from "lucide-react"
 
 import { cn } from "@/lib/utils"
 
 // ---------------------------------------------------------------------------
-// JsonViewer — the single syntax-highlighted JSON block used across the app.
-// Replaces the four duplicated `Highlight`/prism implementations that lived in
-// database-explorer, edge-functions, realtime and output-log.
-//
-// The prism theme is remapped onto the app's semantic tokens instead of the
-// raw `vsDark` palette, so highlighted JSON reads as part of the instrument.
+// JsonViewer — collapsible, syntax-highlighted JSON viewer.
+// Nodes (objects/arrays) can be expanded/collapsed by clicking the toggle.
+// Primitives are rendered inline with semantic coloring.
 // ---------------------------------------------------------------------------
 
-const consoleTheme: PrismTheme = {
-  plain: {
-    color: "var(--color-foreground)",
-    backgroundColor: "var(--color-muted)",
-  },
-  styles: [
-    { types: ["string", "char"], style: { color: "var(--color-success)" } },
-    {
-      types: ["number", "boolean", "constant"],
-      style: { color: "var(--color-warning)" },
-    },
-    {
-      types: ["property", "key", "attr-name"],
-      style: { color: "var(--color-primary)" },
-    },
-    {
-      types: ["null", "keyword", "builtin"],
-      style: { color: "var(--color-info)" },
-    },
-    {
-      types: ["punctuation", "operator"],
-      style: { color: "var(--color-muted-foreground)" },
-    },
-    {
-      types: ["comment"],
-      style: { color: "var(--color-muted-foreground)", fontStyle: "italic" },
-    },
-  ],
+const COLORS = {
+  key: "var(--color-primary)",
+  string: "var(--color-success)",
+  number: "var(--color-warning)",
+  boolean: "var(--color-warning)",
+  null: "var(--color-info)",
+  punctuation: "var(--color-muted-foreground)",
 }
 
-function stringify(data: unknown): string {
-  if (typeof data === "string") return data
-  try {
-    return JSON.stringify(data, null, 2)
-  } catch {
-    return String(data)
+function JsonString({ value }: { value: string }) {
+  return <span style={{ color: COLORS.string }}>&quot;{value}&quot;</span>
+}
+
+function JsonPrimitive({ value }: { value: unknown }) {
+  if (value === null) return <span style={{ color: COLORS.null }}>null</span>
+  if (typeof value === "boolean")
+    return <span style={{ color: COLORS.boolean }}>{value ? "true" : "false"}</span>
+  if (typeof value === "number")
+    return <span style={{ color: COLORS.number }}>{String(value)}</span>
+  if (typeof value === "string") return <JsonString value={value} />
+  return <span>{String(value)}</span>
+}
+
+function Punct({ children }: { children: React.ReactNode }) {
+  return <span style={{ color: COLORS.punctuation }}>{children}</span>
+}
+
+function Key({ name }: { name: string }) {
+  return <span style={{ color: COLORS.key }}>&quot;{name}&quot;</span>
+}
+
+function JsonNode({
+  value,
+  name,
+  depth,
+  defaultCollapsed,
+  last,
+}: {
+  value: unknown
+  name?: string
+  depth: number
+  defaultCollapsed: boolean
+  last: boolean
+}) {
+  const isObject = value !== null && typeof value === "object" && !Array.isArray(value)
+  const isArray = Array.isArray(value)
+  const isExpandable = isObject || isArray
+  const [collapsed, setCollapsed] = React.useState(
+    defaultCollapsed && depth > 0,
+  )
+
+  const indent = depth * 16
+  const comma = last ? "" : ","
+
+  if (!isExpandable) {
+    return (
+      <div style={{ paddingLeft: indent }} className="leading-relaxed">
+        {name !== undefined && (
+          <>
+            <Key name={name} />
+            <Punct>: </Punct>
+          </>
+        )}
+        <JsonPrimitive value={value} />
+        <Punct>{comma}</Punct>
+      </div>
+    )
   }
+
+  const entries = isArray
+    ? (value as unknown[]).map((v, i) => ({ key: String(i), value: v, showKey: false }))
+    : Object.entries(value as Record<string, unknown>).map(([k, v]) => ({
+        key: k,
+        value: v,
+        showKey: true,
+      }))
+
+  const openBrace = isArray ? "[" : "{"
+  const closeBrace = isArray ? "]" : "}"
+  const count = entries.length
+
+  if (collapsed) {
+    return (
+      <div style={{ paddingLeft: indent }} className="leading-relaxed">
+        <button
+          type="button"
+          onClick={() => setCollapsed(false)}
+          className="mr-1 inline-flex items-center align-middle text-muted-foreground transition-colors hover:text-foreground"
+        >
+          <ChevronRight className="size-3" />
+        </button>
+        {name !== undefined && (
+          <>
+            <Key name={name} />
+            <Punct>: </Punct>
+          </>
+        )}
+        <Punct>{openBrace}</Punct>
+        <span className="text-muted-foreground/60 text-[10px]">
+          {" "}{count} {count === 1 ? "item" : "items"}{" "}
+        </span>
+        <Punct>{closeBrace}{comma}</Punct>
+      </div>
+    )
+  }
+
+  return (
+    <div>
+      <div style={{ paddingLeft: indent }} className="leading-relaxed">
+        {isExpandable && depth > 0 && (
+          <button
+            type="button"
+            onClick={() => setCollapsed(true)}
+            className="mr-1 inline-flex items-center align-middle text-muted-foreground transition-colors hover:text-foreground"
+          >
+            <ChevronRight className="size-3 rotate-90 transition-transform" />
+          </button>
+        )}
+        {name !== undefined && (
+          <>
+            <Key name={name} />
+            <Punct>: </Punct>
+          </>
+        )}
+        <Punct>{openBrace}</Punct>
+      </div>
+      {entries.map((entry, i) => (
+        <JsonNode
+          key={entry.key}
+          value={entry.value}
+          name={entry.showKey ? entry.key : undefined}
+          depth={depth + 1}
+          defaultCollapsed={defaultCollapsed}
+          last={i === entries.length - 1}
+        />
+      ))}
+      <div style={{ paddingLeft: indent }} className="leading-relaxed">
+        <Punct>{closeBrace}{comma}</Punct>
+      </div>
+    </div>
+  )
 }
 
 function JsonViewer({
   json,
   data,
   copyable = false,
+  collapsible = true,
+  defaultCollapsed = false,
   className,
   padding = "p-3",
 }: {
-  /** Pre-stringified JSON. */
   json?: string
-  /** Alternative to `json`: a value that will be stringified. */
   data?: unknown
-  /** Show a copy-to-clipboard button that reveals on hover. */
   copyable?: boolean
-  /** Extra classes on the <pre> (e.g. a `max-h-*` cap). */
+  collapsible?: boolean
+  defaultCollapsed?: boolean
   className?: string
-  /** Padding utility for the <pre>. */
   padding?: string
 }) {
-  const code = json ?? stringify(data)
+  const parsed = React.useMemo(() => {
+    if (data !== undefined) return data
+    if (!json) return undefined
+    try {
+      return JSON.parse(json)
+    } catch {
+      return undefined
+    }
+  }, [json, data])
+
+  const rawCode = React.useMemo(() => {
+    if (typeof parsed === "string") return parsed
+    try {
+      return JSON.stringify(parsed, null, 2)
+    } catch {
+      return String(parsed)
+    }
+  }, [parsed])
+
   const [copied, setCopied] = React.useState(false)
 
   const handleCopy = React.useCallback(async () => {
     try {
-      await navigator.clipboard.writeText(code)
+      await navigator.clipboard.writeText(rawCode)
       setCopied(true)
       setTimeout(() => setCopied(false), 1500)
-    } catch {
-      // Clipboard API may be unavailable — ignore silently.
-    }
-  }, [code])
+    } catch {}
+  }, [rawCode])
 
-  const block = (
-    <Highlight theme={consoleTheme} code={code} language="json">
-      {({ style, tokens, getLineProps, getTokenProps }) => (
-        <pre
-          style={style}
-          className={cn(
-            "overflow-x-auto rounded-sm border border-border/60 text-xs tabular-nums",
-            padding,
-            className,
-          )}
-        >
-          {tokens.map((line, i) => (
-            <div key={i} {...getLineProps({ line })}>
-              {line.map((token, key) => (
-                <span key={key} {...getTokenProps({ token })} />
-              ))}
-            </div>
-          ))}
-        </pre>
+  const canCollapse =
+    collapsible &&
+    parsed !== undefined &&
+    typeof parsed === "object" &&
+    parsed !== null
+
+  const block = canCollapse ? (
+    <pre
+      className={cn(
+        "overflow-x-auto rounded-sm border border-border/60 font-mono text-xs tabular-nums",
+        padding,
+        className,
       )}
-    </Highlight>
+      style={{
+        color: "var(--color-foreground)",
+        backgroundColor: "var(--color-muted)",
+      }}
+    >
+      <JsonNode
+        value={parsed}
+        depth={0}
+        defaultCollapsed={defaultCollapsed}
+        last
+      />
+    </pre>
+  ) : (
+    <pre
+      className={cn(
+        "overflow-x-auto rounded-sm border border-border/60 font-mono text-xs tabular-nums whitespace-pre-wrap",
+        padding,
+        className,
+      )}
+      style={{
+        color: "var(--color-foreground)",
+        backgroundColor: "var(--color-muted)",
+      }}
+    >
+      {rawCode}
+    </pre>
   )
 
   if (!copyable) return block
