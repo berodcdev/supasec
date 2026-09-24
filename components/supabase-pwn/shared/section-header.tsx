@@ -32,7 +32,9 @@ function SectionHeader({
                 {eyebrow}
               </p>
             )}
-            <p className="text-sm font-medium text-foreground">{title}</p>
+            <p className="font-mono text-sm font-semibold uppercase tracking-wide text-foreground">
+              {title}
+            </p>
           </div>
         </div>
         {actions}

@@ -288,7 +288,11 @@ export function InitForm() {
             </div>
             {initialized && (
               <div className="flex items-center gap-2">
-                <Button variant="default" size="sm" onClick={triggerScan}>
+                <Button
+                  size="sm"
+                  onClick={triggerScan}
+                  className="bg-armed font-mono uppercase tracking-wider text-armed-foreground hover:bg-armed/90"
+                >
                   <ShieldAlert className="h-3.5 w-3.5" />
                   Run scan
                 </Button>
