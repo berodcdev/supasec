@@ -44,15 +44,15 @@ Ideia descartada não volta a ser sugerida; o motivo fica registrado.
 
 ## 2026-09-23 · backlog de DESIGN / UX (blueprint)
 Momentos de impacto (autoridade):
-- [ ] **Sequência de boot no load** (M) — header/title-block e datum corners "desenham" na entrada; entrada de linha no log (`@starting-style`); tudo sob `prefers-reduced-motion`. É o "brilho" premium · shell/header/output-log · _proposta_
-- [ ] **HUD de scan ao vivo** (M) — durante o AutoPwn: progresso por fase em segmentos + readout do item atual + retículo pulsando (reusa scan-sweep). Transforma o momento-chave · `autopwn.tsx` · _proposta_
-- [ ] **"Target locked" ao conectar** (P) — micro-transição STANDBY→ARMED no header (âmbar acende) confirmando a conexão com peso · `header.tsx` · _proposta_
+- [x] **Sequência de boot no load** (M) — boot-fade-up no header/conexão + datum corners escalonados + entrada de linha no log · _feita_
+- [x] **HUD de scan ao vivo** (M) — faixa de fases done/active(âmbar+sweep)/pending + readout · _feita_
+- [x] **"Target locked" ao conectar** (P) — STATUS STANDBY→ARMED com glow · _feita_
 
 Consistência & clareza:
-- [ ] **Toasts no tema** (P) — estilizar o sonner (mono, cantos retos, cor por tipo); hoje destoa do blueprint · `components/ui/sonner.tsx` · _proposta_
-- [ ] **Skeletons esquemáticos** (P-M) — áreas de resultado (SELECT/RPC/scan) com placeholder + scan-sweep em vez de "pop"; comunica trabalho · telas de resultado · _proposta_
-- [ ] **Empty states com CTA por aba** (P) — Database sem tabela / Storage sem bucket viram blueprint com ação ("Bruteforce tables") em vez de texto solto · database/storage · _proposta_
-- [ ] **Retículo nos focos que faltam** (P) — canal ativo (realtime) e bucket conectado (storage) ganham o mesmo frame de foco da tabela do DB · realtime/storage · _proposta_
+- [x] **Toasts no tema** (P) — sonner mono/retos/cor por tipo · _feita_
+- [x] **Skeletons esquemáticos** (P-M) — ResultSkeleton com scan-sweep em SELECT/Edge · _feita_ (RPC opcional depois)
+- [x] **Empty states com CTA por aba** (P) — "No table/bucket selected" em blueprint · _feita_
+- [x] **Retículo nos focos que faltam** (P) — bucket (storage) e canal (realtime) · _feita_
 
 Ferramenta pro:
 - [ ] **Command palette ⌘K** (M) — pular abas, conectar, run scan, focar tabela; cara de instrumento sério · nova peça · _proposta_
