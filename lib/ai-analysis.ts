@@ -150,8 +150,9 @@ export const AI_MODELS: AIModel[] = [
 
 // -- Prompt builder -------------------------------------------------------
 
-export function buildAnalysisPayload(record: ScanRecord, findings: Finding[]) {
+export function buildAnalysisPayload(record: ScanRecord, findings: Finding[], supabaseKey?: string) {
   const counts = summarizeFindings(findings)
+  const keyVal = supabaseKey || `YOUR_${record.keyType.toUpperCase()}_KEY`
 
   const systemPrompt = `You are a senior penetration tester specializing in Supabase, PostgREST, and cloud-native PostgreSQL infrastructure. You operate in a red team engagement context — your role is to think like an attacker, not a compliance auditor.
 
@@ -183,21 +184,23 @@ Only include chains that are REALISTIC given the actual scan data. Don't invent 
 ### 3. WRITE proof-of-concept commands
 For every confirmed or likely finding, produce a complete, copy-pasteable curl command that PROVES the vulnerability. Use the ACTUAL project URL and API key from the scan data.
 
+The API key for all PoCs is: ${keyVal}
+
 PostgREST patterns:
-  curl -s "${record.projectUrl}/rest/v1/{table}?select=*&limit=5" -H "apikey: YOUR_${record.keyType.toUpperCase()}_KEY" -H "Authorization: Bearer YOUR_${record.keyType.toUpperCase()}_KEY"
-  curl -s -X POST "${record.projectUrl}/rest/v1/{table}" -H "apikey: YOUR_${record.keyType.toUpperCase()}_KEY" -H "Authorization: Bearer YOUR_${record.keyType.toUpperCase()}_KEY" -H "Content-Type: application/json" -H "Prefer: return=representation" -d '{"col":"value"}'
+  curl -s "${record.projectUrl}/rest/v1/{table}?select=*&limit=5" -H "apikey: ${keyVal}" -H "Authorization: Bearer ${keyVal}"
+  curl -s -X POST "${record.projectUrl}/rest/v1/{table}" -H "apikey: ${keyVal}" -H "Authorization: Bearer ${keyVal}" -H "Content-Type: application/json" -H "Prefer: return=representation" -d '{"col":"value"}'
 
 Storage patterns:
-  curl -s "${record.projectUrl}/storage/v1/object/list/{bucket}" -H "apikey: YOUR_${record.keyType.toUpperCase()}_KEY" -H "Authorization: Bearer YOUR_${record.keyType.toUpperCase()}_KEY" -H "Content-Type: application/json" -d '{"prefix":"","limit":100}'
+  curl -s "${record.projectUrl}/storage/v1/object/list/{bucket}" -H "apikey: ${keyVal}" -H "Authorization: Bearer ${keyVal}" -H "Content-Type: application/json" -d '{"prefix":"","limit":100}'
   curl -s "${record.projectUrl}/storage/v1/object/public/{bucket}/{path}"
 
 Auth patterns:
-  curl -s -X POST "${record.projectUrl}/auth/v1/signup" -H "apikey: YOUR_${record.keyType.toUpperCase()}_KEY" -H "Content-Type: application/json" -d '{"email":"test@evil.com","password":"Test1234!"}'
+  curl -s -X POST "${record.projectUrl}/auth/v1/signup" -H "apikey: ${keyVal}" -H "Content-Type: application/json" -d '{"email":"test@evil.com","password":"Test1234!"}'
 
 GraphQL patterns:
-  curl -s -X POST "${record.projectUrl}/graphql/v1" -H "apikey: YOUR_${record.keyType.toUpperCase()}_KEY" -H "Authorization: Bearer YOUR_${record.keyType.toUpperCase()}_KEY" -H "Content-Type: application/json" -d '{"query":"{ {collection}Collection(first:5) { edges { node { id } } } }"}'
+  curl -s -X POST "${record.projectUrl}/graphql/v1" -H "apikey: ${keyVal}" -H "Authorization: Bearer ${keyVal}" -H "Content-Type: application/json" -d '{"query":"{ {collection}Collection(first:5) { edges { node { id } } } }"}'
 
-Replace {table}, {bucket}, {path}, {collection} with actual names from the scan data. Replace YOUR_${record.keyType.toUpperCase()}_KEY with the user's actual ${record.keyType} key (the scan was performed with this key type).
+Replace {table}, {bucket}, {path}, {collection} with actual names from the scan data.
 
 ### 4. PRIORITIZE remediations — by real-world impact
 Order by what an attacker would exploit FIRST, not by CVSS-like severity. A writable users table is more urgent than an exposed empty config table, even if both are "critical" by label.
@@ -300,6 +303,7 @@ export type AIDeepDive = {
 export function buildDeepDivePayload(
   finding: Finding,
   record: ScanRecord,
+  supabaseKey?: string,
 ) {
   const table = record.db.find((r) => r.name === finding.target)
 
@@ -322,12 +326,14 @@ Target resource details:
 - File count: ${bucket.fileCount ?? "unknown"}`
   })()
 
+  const keyVal = supabaseKey || `YOUR_${record.keyType.toUpperCase()}_KEY`
+
   const systemPrompt = `You are a senior red team operator performing a targeted deep-dive on a single security finding from a Supabase project. This is NOT a general audit — you are drilling into one specific vulnerability to determine its real-world exploitability.
 
 ## CONTEXT
 - Project URL: ${record.projectUrl}
-- API Key type: ${record.keyType} (${record.keyType === "anon" || record.keyType === "publishable" ? "this is what ANY unauthenticated visitor can use — if this works, it's externally exploitable" : record.keyType === "service_role" || record.keyType === "secret" ? "privileged key — expected to bypass security controls. Only critical if this key was exposed client-side" : "unknown privilege level — assess conservatively"})
-- API Key type used for scan: ${record.keyType}${tableContext}${bucketContext}
+- API Key (${record.keyType}): ${keyVal}
+- Key privilege: ${record.keyType === "anon" || record.keyType === "publishable" ? "this is what ANY unauthenticated visitor can use — if this works, it's externally exploitable" : record.keyType === "service_role" || record.keyType === "secret" ? "privileged key — expected to bypass security controls. Only critical if this key was exposed client-side" : "unknown privilege level — assess conservatively"}${tableContext}${bucketContext}
 
 ## YOUR TASK
 
@@ -359,7 +365,7 @@ Don't include scenarios that require conditions not present in the scan data.
 ### 5. PROOF OF CONCEPT — copy-paste ready
 Write a complete curl command that demonstrates the vulnerability. It must:
 - Use the actual project URL: ${record.projectUrl}
-- Use YOUR_${record.keyType.toUpperCase()}_KEY as the API key placeholder
+- Use the API key: ${keyVal}
 - Target the actual resource: ${finding.target || "the specific endpoint"}
 - Be copy-pasteable directly into a terminal
 - Include expected output description as a comment

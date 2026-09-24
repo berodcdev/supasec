@@ -536,8 +536,9 @@ async function streamAnalysis(
   onChunk: (text: string) => void,
   onPhase: (phase: StreamPhase) => void,
   signal?: AbortSignal,
+  supabaseKey?: string,
 ): Promise<string> {
-  const { system, user } = buildAnalysisPayload(record, findings)
+  const { system, user } = buildAnalysisPayload(record, findings, supabaseKey)
 
   onPhase("connecting")
 
@@ -745,9 +746,11 @@ function formatAIReport(analysis: AIAnalysis, findings: Finding[]): string {
 export function AIAnalysisPanel({
   scanRecord,
   findings,
+  supabaseKey,
 }: {
   scanRecord: ScanRecord | null
   findings: Finding[]
+  supabaseKey?: string
 }) {
   const [config, setConfig] = useState<AIConfig | null>(null)
   const [analyzing, setAnalyzing] = useState(false)
@@ -812,6 +815,7 @@ export function AIAnalysisPanel({
         (text) => setRawStream(text),
         (p) => setPhase(p),
         controller.signal,
+        supabaseKey,
       )
 
       const parsed = parseAIResponse(full)
@@ -1295,9 +1299,11 @@ export function AIAnalysisPanel({
 export function AskAIFindingButton({
   finding,
   scanRecord,
+  supabaseKey,
 }: {
   finding: Finding
   scanRecord: ScanRecord | null
+  supabaseKey?: string
 }) {
   const [config] = useState<AIConfig | null>(() => loadAIConfig())
   const [open, setOpen] = useState(false)
@@ -1326,7 +1332,7 @@ export function AskAIFindingButton({
 
     try {
       const { buildDeepDivePayload, parseDeepDiveResponse } = await import("@/lib/ai-analysis")
-      const { system, user } = buildDeepDivePayload(finding, scanRecord)
+      const { system, user } = buildDeepDivePayload(finding, scanRecord, supabaseKey)
 
       const res = await fetch("/api/ai-analyze", {
         method: "POST",
