@@ -58,6 +58,19 @@ Ferramenta pro:
 - [ ] **Command palette ⌘K** (M) — pular abas, conectar, run scan, focar tabela; cara de instrumento sério · nova peça · _proposta_
 - [ ] **JSON colapsável** (M) — nós recolhíveis + copiar por nó no JsonViewer (payloads grandes) · `shared/json-viewer.tsx` · _proposta_
 
+## 2026-09-24 · backlog de FEATURES
+Assessment Supabase-specific (maior valor):
+- [ ] **Relationship traversal / embedding** (M) — usar o embedding do PostgREST (`select=*,related(*)`) pra pivotar de uma tabela legível para dados de tabelas bloqueadas; sugerir pivôs a partir do schema/FKs · database-explorer · _proposta_
+- [ ] **Analisador de políticas RLS** (M) — transformar as policies importadas em findings com severidade (USING true, sem WITH CHECK, checagem de role fraca); hoje só há um aviso simples · database-explorer + findings · _proposta_
+- [ ] **Teste de mass-assignment / escalonamento** (P-M) — no INSERT/UPDATE, injetar campos sensíveis (`role`, `is_admin`, `user_id`, `tenant_id`) e detectar se a policy deixa escalar; reusa o auto-fill · database-explorer · _proposta_
+- [ ] **Probing de pg_graphql** (M) — Supabase expõe `/graphql/v1`; introspection + queries revelam superfície que o REST às vezes esconde · nova aba/peça · _proposta_
+
+Cobertura & workflow:
+- [ ] **Enumeração profunda de storage + bulk** (M) — listar pastas recursivamente e baixar em lote o que estiver exposto · storage-explorer · _proposta_
+- [ ] **Realtime sweep** (M) — testar postgres_changes em todas as tabelas de uma vez (realtime às vezes entrega o que o SELECT bloqueia) · realtime + autopwn · _proposta_
+- [ ] **Multi-target workspace** (G) — gerenciar vários alvos e alternar; hoje é um por vez · shell/contexto · _proposta_
+- [ ] **Wordlists gerenciáveis** (P) — salvar/editar wordlists de tabela/bucket/função (hoje é campo solto) · nova peça · _proposta_
+
 ## ⏸️ PENDENTE (bloqueado — ação de conta, não código)
 - [ ] **Publicar imagem no GHCR** — a Action (`.github/workflows/docker.yml`) está pronta mas o **GitHub Actions está bloqueado por billing** na conta. Destravar: resolver billing (Settings → Billing) → Action publica no push → tornar o package GHCR público. Alternativa sem Actions: PAT com `write:packages` e publicar manualmente. _blocked_
 
