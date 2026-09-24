@@ -182,7 +182,7 @@ export function Header() {
         <h1 className="text-lg font-bold tracking-tight">supabase-pwn</h1>
       </div>
       <a
-        href="https://github.com/BobTheShoplifter/supabase-pwn"
+        href="https://github.com/berodcdev/supabase-pwn"
         target="_blank"
         rel="noopener noreferrer"
         className="text-sm text-muted-foreground hover:text-foreground transition-colors"

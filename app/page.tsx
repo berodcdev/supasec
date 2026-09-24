@@ -10,7 +10,9 @@ import { StorageExplorer } from "@/components/supabase-pwn/storage-explorer"
 import { EdgeFunctions } from "@/components/supabase-pwn/edge-functions"
 import { Realtime } from "@/components/supabase-pwn/realtime"
 import { AutoPwn } from "@/components/supabase-pwn/autopwn"
+import { GraphQLExplorer } from "@/components/supabase-pwn/graphql-explorer"
 import { ReconDashboard } from "@/components/supabase-pwn/recon-dashboard"
+import { CommandPalette } from "@/components/supabase-pwn/command-palette"
 import { useSupabase } from "@/lib/supabase-context"
 
 function ActiveTool({ tab }: { tab: string }) {
@@ -35,6 +37,8 @@ function ActiveTool({ tab }: { tab: string }) {
           <EdgeFunctions />
         </div>
       )
+    case "graphql":
+      return <GraphQLExplorer />
     case "autopwn":
       return (
         <div className="p-4">
@@ -52,6 +56,7 @@ export default function Home() {
   return (
     <div className="flex h-screen flex-col bg-background bg-blueprint text-foreground">
       <Header />
+      <CommandPalette />
 
       {initialized ? (
         <div className="flex min-h-0 flex-1">

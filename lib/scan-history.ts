@@ -40,6 +40,22 @@ export type StoredFunctionResult = {
   statusCode?: number
 }
 
+export type StoredRealtimeResult = {
+  table: string
+  subscribed: boolean
+  error?: string
+}
+
+export type StoredGraphqlResult = {
+  available: boolean
+  types?: number
+  queries?: number
+  mutations?: number
+  insertMutations?: string[]
+  deleteMutations?: string[]
+  error?: string
+}
+
 export type ScanRecord = {
   schemaVersion: 1
   projectUrl: string
@@ -49,6 +65,9 @@ export type ScanRecord = {
   storage: StoredStorageResult[]
   auth: StoredAuthResult[]
   functions: StoredFunctionResult[]
+  realtime?: StoredRealtimeResult[]
+  graphql?: StoredGraphqlResult
+  aiAnalysis?: unknown
 }
 
 export type ScanDiff = {
@@ -118,6 +137,43 @@ export function saveScan(record: ScanRecord): void {
     localStorage.setItem(projectKey(record.projectUrl), JSON.stringify(history))
   } catch {
     // localStorage may be unavailable — silently ignore
+  }
+}
+
+/** Attach an AI analysis result to the most recent scan (or a specific timestamp). */
+export function saveAIAnalysis(projectUrl: string, analysis: unknown, timestamp?: string): void {
+  if (typeof window === "undefined") return
+  try {
+    const raw = localStorage.getItem(projectKey(projectUrl))
+    if (!raw) return
+    const parsed = JSON.parse(raw)
+    const history: ScanRecord[] = Array.isArray(parsed) ? parsed : [parsed as ScanRecord]
+    const target = timestamp
+      ? history.find((r) => r.timestamp === timestamp)
+      : history[0]
+    if (target) {
+      target.aiAnalysis = analysis
+      localStorage.setItem(projectKey(projectUrl), JSON.stringify(history))
+    }
+  } catch {
+    // ignore
+  }
+}
+
+/** Load the AI analysis attached to a scan, if any. */
+export function loadAIAnalysis(projectUrl: string, timestamp?: string): unknown | null {
+  if (typeof window === "undefined") return null
+  try {
+    const raw = localStorage.getItem(projectKey(projectUrl))
+    if (!raw) return null
+    const parsed = JSON.parse(raw)
+    const history: ScanRecord[] = Array.isArray(parsed) ? parsed : [parsed as ScanRecord]
+    const target = timestamp
+      ? history.find((r) => r.timestamp === timestamp)
+      : history[0]
+    return target?.aiAnalysis ?? null
+  } catch {
+    return null
   }
 }
 

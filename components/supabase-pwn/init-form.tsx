@@ -432,20 +432,26 @@ export function InitForm() {
             )}
 
             {!initialized && (
-              <Button
-                className="w-full rounded-none bg-armed font-mono uppercase tracking-[0.2em] text-armed-foreground shadow-[0_0_20px_-6px_var(--color-armed)] hover:bg-armed/90"
-                onClick={handleInitialize}
-                disabled={!canSubmit || loading}
-              >
-                {loading ? (
-                  <>
-                    <Loader2 className="h-4 w-4 animate-spin" />
-                    Connecting…
-                  </>
-                ) : (
-                  "▸ Initialize"
-                )}
-              </Button>
+              <>
+                <Button
+                  className="w-full rounded-none bg-armed font-mono uppercase tracking-[0.2em] text-armed-foreground shadow-[0_0_20px_-6px_var(--color-armed)] hover:bg-armed/90"
+                  onClick={handleInitialize}
+                  disabled={!canSubmit || loading}
+                >
+                  {loading ? (
+                    <>
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                      Connecting…
+                    </>
+                  ) : (
+                    "▸ Initialize"
+                  )}
+                </Button>
+                <p className="text-center font-mono text-[10px] uppercase tracking-widest text-muted-foreground/60">
+                  <span className="text-warning/70">⚠</span>{" "}
+                  Authorized testing only — do not use against projects you don&apos;t own or have explicit permission to test.
+                </p>
+              </>
             )}
           </CardContent>
         </CollapsibleContent>
