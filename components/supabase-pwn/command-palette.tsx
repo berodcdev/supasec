@@ -27,7 +27,8 @@ import {
 } from "lucide-react"
 import { useSupabase } from "@/lib/supabase-context"
 import { formatMarkdownReport, formatHtmlReport, downloadFile, reportFilenameBase } from "@/lib/scan-report"
-import { loadLastScan } from "@/lib/scan-history"
+import { loadLastScan, loadAIAnalysis } from "@/lib/scan-history"
+import type { AIAnalysis } from "@/lib/ai-analysis"
 
 type NavItem = { id: string; label: string; icon: LucideIcon; keywords?: string[] }
 
@@ -85,7 +86,8 @@ export function CommandPalette() {
     if (!projectUrl) return
     const last = loadLastScan(projectUrl)
     if (!last) return
-    const md = formatMarkdownReport(last)
+    const ai = loadAIAnalysis(projectUrl, last.timestamp) as AIAnalysis | null
+    const md = formatMarkdownReport(last, ai)
     const base = reportFilenameBase(last)
     downloadFile(`${base}.md`, md, "text/markdown")
     setOpen(false)
@@ -95,7 +97,8 @@ export function CommandPalette() {
     if (!projectUrl) return
     const last = loadLastScan(projectUrl)
     if (!last) return
-    const html = formatHtmlReport(last)
+    const ai = loadAIAnalysis(projectUrl, last.timestamp) as AIAnalysis | null
+    const html = formatHtmlReport(last, ai)
     const base = reportFilenameBase(last)
     downloadFile(`${base}.html`, html, "text/html")
     setOpen(false)
