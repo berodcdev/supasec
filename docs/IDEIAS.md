@@ -33,7 +33,7 @@ Ideia descartada não volta a ser sugerida; o motivo fica registrado.
 - [x] **Histórico de requests com replay** (M) — painel com copy-curl + Replay (leituras) · _feita_
 
 ## 2026-09-23 · visão geral / consistência
-- [ ] **Persistir o histórico de requests** (P) — igual ao log, hoje some no F5; salvar no localStorage · `lib/supabase-context.tsx` · _proposta_
+- [x] **Persistir o histórico de requests** (P) — já implementado com localStorage hydrate/save · _feita_
 - [x] **Dashboard de Recon** (M) — aba inicial com overview + atalhos · _feita_
 - [x] **Marcar buckets sensíveis no seletor do Storage** (P) — badge 🔎 no dropdown · _feita_
 - [x] **Últimas pistas no dashboard** (P) — card "Recent clues" · _feita_
@@ -98,8 +98,8 @@ Cobertura & workflow:
 - [x] **Novos findings no diff entre scans** (M) — card "Findings changes" com novos (vermelho) e corrigidos (verde, riscado) via `deriveFindings` nos dois records · _feita_
 
 ## 2026-09-23 · a partir de "Extract não acha config Supabase em apps Vite/Next"
-- [ ] **Seguir chunks importados dentro de outros chunks (1 nível)** (M) — hoje varremos os `.js` do HTML mas não os `.js` que esses scripts importam; a config costuma estar num chunk lazy; reusa a via de fetch/scan recém-ampliada · `app/api/extract-config/route.ts` · _proposta_
-- [ ] **Detectar Supabase self-hosted / domínio custom** (M) — a regex só pega `*.supabase.co|in`; capturar `createClient("url","key")` cobriria instâncias self-hosted que hoje passam batido · `app/api/extract-config/route.ts` · _proposta_
+- [x] **Seguir chunks importados dentro de outros chunks (1 nível)** (M) — import() dinâmico resolvido e varrido · _feita_
+- [x] **Detectar Supabase self-hosted / domínio custom** (M) — createClient() + env vars + chunk following · _feita_
 - [ ] **Mostrar resumo da varredura no sucesso** (P) — a API já devolve `scannedScripts`/`scannedEntries`, mas só aparece no erro; exibir sempre dá confiança no que foi coberto · `components/supabase-pwn/init-form.tsx` · _proposta_
 
 ## 2026-09-23 · a partir de "Enriquecer painel de logs e resultados de RLS do AutoPwn"
