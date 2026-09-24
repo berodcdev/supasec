@@ -21,7 +21,7 @@ function Corner({
       aria-hidden
       className={cn(
         "pointer-events-none absolute size-3 transition-colors duration-200",
-        active ? "border-primary" : "border-border",
+        active ? "border-primary animate-reticle-pulse" : "border-border",
         className,
       )}
     />
@@ -42,11 +42,7 @@ function ReticlePanel({
 }) {
   return (
     <div
-      className={cn(
-        "relative rounded-sm p-px transition-colors",
-        active && "animate-reticle-pulse rounded-sm",
-        className,
-      )}
+      className={cn("relative rounded-sm p-px transition-colors", className)}
     >
       {/* Four L-corners */}
       <Corner active={active} className="left-0 top-0 border-l border-t" />

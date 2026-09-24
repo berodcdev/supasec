@@ -17,6 +17,7 @@ import type { RealtimeChannel } from "@supabase/supabase-js"
 
 import { useSupabase } from "@/lib/supabase-context"
 import { scanJsonForSecrets } from "@/lib/sensitive"
+import { ReticlePanel } from "@/components/supabase-pwn/shared/reticle-panel"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -808,6 +809,11 @@ export function Realtime() {
         </span>
       </div>
 
+      <ReticlePanel
+        active={!!activeChannelName}
+        label={activeChannelName ? `CH:${activeChannelName}` : "CH"}
+        className="block"
+      >
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         {/* Left column: Channel Manager + Postgres Changes */}
         <div className="space-y-4">
@@ -841,6 +847,7 @@ export function Realtime() {
           />
         </div>
       </div>
+      </ReticlePanel>
 
       {/* Full-width: Live Event Stream */}
       <LiveEventStream events={events} onClear={handleClearEvents} />
