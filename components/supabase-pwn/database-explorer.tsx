@@ -26,6 +26,7 @@ import { EmptyState } from "@/components/supabase-pwn/shared/empty-state"
 import { ReticlePanel } from "@/components/supabase-pwn/shared/reticle-panel"
 import { ReticleMark } from "@/components/supabase-pwn/shared/reticle-mark"
 import { isSensitiveColumn, sensitiveTableHint, scanJsonForSecrets } from "@/lib/sensitive"
+import { analyzeRlsPolicy, worstRlsSeverity, type RlsSeverity } from "@/lib/rls"
 import { toCurl, restUrl, restHeaders, filtersToParams } from "@/lib/curl"
 import { CopyCurl } from "@/components/supabase-pwn/shared/copy-curl"
 import { ResultSkeleton } from "@/components/supabase-pwn/shared/result-skeleton"
@@ -236,10 +237,12 @@ function useFilterState() {
 function SelectTab({
   table,
   columns,
+  tables,
   onSendToUpdate,
 }: {
   table: string
   columns: { name: string; type: string; required: boolean }[]
+  tables?: string[]
   onSendToUpdate?: (row: Record<string, unknown>) => void
 }) {
   const { client, addLog, projectUrl, apiKey, session, recordRequest } = useSupabase()
@@ -321,6 +324,32 @@ function SelectTab({
           value={selectColumns}
           onChange={(e) => setSelectColumns(e.target.value)}
         />
+        {tables && tables.length > 1 && (
+          <div className="flex items-center gap-2">
+            <span className="font-mono text-[10px] uppercase tracking-widest text-muted-foreground">
+              Embed
+            </span>
+            <Select
+              value=""
+              onValueChange={(t) =>
+                setSelectColumns((c) => `${c.trim() || "*"},${t}(*)`)
+              }
+            >
+              <SelectTrigger className="h-8 w-[240px]">
+                <SelectValue placeholder="+ related table (traverse via PostgREST)" />
+              </SelectTrigger>
+              <SelectContent>
+                {tables
+                  .filter((t) => t !== table)
+                  .map((t) => (
+                    <SelectItem key={t} value={t}>
+                      {t}
+                    </SelectItem>
+                  ))}
+              </SelectContent>
+            </Select>
+          </div>
+        )}
       </div>
 
       {/* Filters */}
@@ -500,6 +529,23 @@ function InsertTab({
       } else {
         addLog("success", `INSERT succeeded`, data)
         setResult(JSON.stringify(data, null, 2))
+        // Mass-assignment: did any escalation field come back with our value?
+        const row = Array.isArray(data) && data.length > 0 ? data[0] : null
+        if (row && typeof row === "object" && typeof parsed === "object" && parsed) {
+          const accepted = Object.keys(ESCALATION_FIELDS).filter(
+            (k) =>
+              k in (parsed as Record<string, unknown>) &&
+              (row as Record<string, unknown>)[k] ===
+                (parsed as Record<string, unknown>)[k],
+          )
+          if (accepted.length > 0) {
+            addLog(
+              "error",
+              `🔎 CLUE — mass-assignment on "${table}": server accepted ${accepted.join(", ")}`,
+              { table, accepted },
+            )
+          }
+        }
       }
     } catch (err) {
       const msg = err instanceof Error ? err.message : "Unknown error"
@@ -515,22 +561,43 @@ function InsertTab({
       <div className="space-y-2">
         <div className="flex items-center justify-between">
           <Label htmlFor="insert-json">Row Data (JSON)</Label>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => {
-              const data: Record<string, unknown> = {}
-              for (const col of columns) {
-                if (AUTO_SKIP_COLUMNS.has(col.name.toLowerCase())) continue
-                data[col.name] = generateFakeValue(col.type, col.name)
-              }
-              setJsonData(JSON.stringify(data, null, 2))
-            }}
-            disabled={columns.length === 0}
-          >
-            <Wand2 className="h-3.5 w-3.5 mr-1" />
-            Auto-fill
-          </Button>
+          <div className="flex gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => {
+                const data: Record<string, unknown> = {}
+                for (const col of columns) {
+                  if (AUTO_SKIP_COLUMNS.has(col.name.toLowerCase())) continue
+                  data[col.name] = generateFakeValue(col.type, col.name)
+                }
+                setJsonData(JSON.stringify(data, null, 2))
+              }}
+              disabled={columns.length === 0}
+            >
+              <Wand2 className="h-3.5 w-3.5 mr-1" />
+              Auto-fill
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              title="Inject role/is_admin/user_id… to test mass-assignment"
+              onClick={() => {
+                let base: Record<string, unknown> = {}
+                try {
+                  base = jsonData.trim() ? JSON.parse(jsonData) : {}
+                } catch {
+                  base = {}
+                }
+                setJsonData(
+                  JSON.stringify({ ...base, ...ESCALATION_FIELDS }, null, 2),
+                )
+              }}
+            >
+              <Shield className="h-3.5 w-3.5 mr-1" />
+              Escalate
+            </Button>
+          </div>
         </div>
         <Textarea
           id="insert-json"
@@ -1060,6 +1127,27 @@ const COMMAND_SEVERITY: Record<string, Severity> = {
   ALL: "neutral",
 }
 
+const RLS_BADGE: Record<RlsSeverity, Severity> = {
+  critical: "critical",
+  high: "high",
+  medium: "warning",
+  info: "safe",
+}
+
+// Fields commonly gated by policy — injecting them tests for mass-assignment /
+// privilege escalation (does the row come back with the value we sent?).
+const ESCALATION_FIELDS: Record<string, unknown> = {
+  role: "admin",
+  is_admin: true,
+  is_superuser: true,
+  admin: true,
+  verified: true,
+  banned: false,
+  user_id: "00000000-0000-0000-0000-000000000000",
+  tenant_id: "00000000-0000-0000-0000-000000000000",
+  owner_id: "00000000-0000-0000-0000-000000000000",
+}
+
 function RlsPoliciesTab({
   policies,
   selectedTable,
@@ -1126,7 +1214,10 @@ function RlsPoliciesTab({
             No policies for the selected table.
           </p>
         ) : (
-          displayed.map((policy, idx) => (
+          displayed.map((policy, idx) => {
+            const issues = analyzeRlsPolicy(policy)
+            const worst = worstRlsSeverity(issues)
+            return (
             <Card key={`${policy.table}-${policy.name}-${idx}`}>
               <CardContent className="p-3 space-y-2">
                 <div className="flex items-center gap-2 flex-wrap">
@@ -1137,6 +1228,9 @@ function RlsPoliciesTab({
                     {policy.command}
                   </StatusBadge>
                   <span className="text-sm font-medium">{policy.name}</span>
+                  <StatusBadge severity={RLS_BADGE[worst]} dot={false} className="ml-auto">
+                    {worst}
+                  </StatusBadge>
                 </div>
                 {policy.using && (
                   <div className="space-y-1">
@@ -1154,14 +1248,25 @@ function RlsPoliciesTab({
                     </pre>
                   </div>
                 )}
-                {!policy.using && !policy.withCheck && (
-                  <p className="text-xs text-warning">
-                    No USING or WITH CHECK clause — may allow unrestricted access
-                  </p>
-                )}
+                <ul className="space-y-0.5 pt-1">
+                  {issues.map((iss, i) => (
+                    <li
+                      key={i}
+                      className={
+                        iss.severity === "info"
+                          ? "text-xs text-muted-foreground"
+                          : "text-xs text-warning"
+                      }
+                    >
+                      {iss.severity !== "info" ? "⚠ " : ""}
+                      {iss.message}
+                    </li>
+                  ))}
+                </ul>
               </CardContent>
             </Card>
-          ))
+            )
+          })
         )}
       </div>
     </div>
@@ -1488,7 +1593,7 @@ export function DatabaseExplorer() {
             <TabsContent value="select">
               <Card>
                 <CardContent className="p-4">
-                  <SelectTab table={selectedTable} columns={selectedColumns} onSendToUpdate={handleSendToUpdate} />
+                  <SelectTab table={selectedTable} columns={selectedColumns} tables={tables} onSendToUpdate={handleSendToUpdate} />
                 </CardContent>
               </Card>
             </TabsContent>
