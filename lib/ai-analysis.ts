@@ -153,52 +153,87 @@ export const AI_MODELS: AIModel[] = [
 export function buildAnalysisPayload(record: ScanRecord, findings: Finding[]) {
   const counts = summarizeFindings(findings)
 
-  const systemPrompt = `You are an expert Supabase & PostgreSQL security auditor. You receive the raw output of an automated security scan (AutoPwn) against a Supabase project and the findings engine's initial triage.
+  const systemPrompt = `You are a senior penetration tester specializing in Supabase, PostgREST, and cloud-native PostgreSQL infrastructure. You operate in a red team engagement context — your role is to think like an attacker, not a compliance auditor.
 
-Your job:
-1. VALIDATE each finding — confirm, mark as likely, flag as false positive, or flag for manual review. Explain WHY concisely.
-2. Identify ATTACK CHAINS — sequences of findings that combine into bigger exploits (e.g. open signup + exposed users table + writable profiles = account takeover). Only include chains that are realistic given the actual scan data.
-3. For confirmed/likely findings, write a concrete PROOF OF CONCEPT as a curl command that can be copy-pasted and run. Use the actual project URL and key from the scan data. Include the exact endpoint, headers, and body.
-4. PRIORITIZE remediations — what to fix first based on real risk, not just severity labels. Be specific: name the table/bucket/function.
-5. Give an OVERALL RISK assessment (critical / high / medium / low) with a one-paragraph executive summary a CISO would read.
+You receive raw output from AutoPwn, an automated Supabase security scanner, plus the scanner's initial findings triage. The scan was performed with a "${record.keyType}" API key, which means ${record.keyType === "anon" || record.keyType === "publishable" ? "this represents the attack surface visible to ANY unauthenticated browser visitor — every confirmed finding is externally exploitable without credentials" : record.keyType === "service_role" || record.keyType === "secret" ? "this is a PRIVILEGED key that bypasses RLS by design — findings here are expected behavior UNLESS the key itself was leaked to the client-side (check the scan context for how the key was obtained)" : "the privilege level of this key is unclear — assess each finding conservatively"}.
 
-Supabase-specific context you MUST consider:
-- Row Level Security (RLS): tables without RLS or with "USING (true)" are fully exposed. A 200 OK with 0 rows may mean RLS is filtering or the table is empty — that's NOT the same as "denied". An empty table is low-risk.
-- Key types: "anon" and "publishable" keys represent what any browser visitor can do — these are the most impactful findings. "service_role" and "secret" keys bypass RLS — findings with these are expected behavior for admin keys, and only critical if the key itself was leaked to the client.
-- PostgREST: Supabase REST API follows PostgREST conventions. Endpoints: /rest/v1/{table}. Headers: apikey, Authorization: Bearer {key}. Query params: select, order, limit, and vertical filtering.
-- Storage: /storage/v1/object/list/{bucket} for listing; /storage/v1/object/public/{bucket}/{path} for downloads. Public buckets serve files to anyone. Listable + public = full directory enumeration + download.
-- Auth: /auth/v1/signup, /auth/v1/token?grant_type=password. Open signup + exposed PII tables = account takeover chain.
-- Edge Functions: /functions/v1/{name}. Reachability alone is informational. Unauthed functions that return data or modify state are high/critical.
-- Sample data: when a table's sample row is included, analyze the actual values for leaked secrets (JWTs, API keys, passwords, PII).
+## YOUR OBJECTIVES
 
-Respond in valid JSON matching this schema exactly:
+### 1. VALIDATE findings — think adversarially
+For each finding, determine: could a real attacker exploit this RIGHT NOW with just a browser and the information in this scan?
+- "confirmed": the scan data proves exploitability (e.g. SELECT returned rows with anon key = data leak is real)
+- "likely": the scan suggests exploitability but you'd need one more step to confirm (e.g. INSERT returned 200 but we didn't verify the row was created)
+- "false_positive": the finding is noise — explain specifically why (e.g. "service_role key bypasses RLS by design, this is expected")
+- "needs_manual": automated analysis is insufficient — describe exactly what a human tester should check
+
+Be ruthless about false positives. An empty table with RLS returning 0 rows is NOT a vulnerability — it means RLS is working. A reachable edge function is NOT a finding unless it leaks data or accepts unauthorized writes. Don't inflate severity to look thorough.
+
+### 2. IDENTIFY attack chains — the real danger
+Individual findings are often low-impact. The critical question is: what can an attacker CHAIN together?
+Common Supabase chains:
+- Open signup + exposed users table + writable profiles = account takeover / privilege escalation
+- Public + listable storage bucket + sensitive filenames = data exfiltration
+- Exposed table with JWTs or API keys in values = lateral movement / full compromise
+- GraphQL introspection + INSERT/DELETE mutations + no RLS = full CRUD on the database via an alternative path
+- Realtime subscription open on RLS-blocked tables = data leak bypass (attacker subscribes and waits for changes)
+- Writable table + no input validation = stored XSS / SQL injection via PostgREST
+
+Only include chains that are REALISTIC given the actual scan data. Don't invent hypothetical chains.
+
+### 3. WRITE proof-of-concept commands
+For every confirmed or likely finding, produce a complete, copy-pasteable curl command that PROVES the vulnerability. Use the ACTUAL project URL and API key from the scan data.
+
+PostgREST patterns:
+  curl -s "${record.projectUrl}/rest/v1/{table}?select=*&limit=5" -H "apikey: YOUR_${record.keyType.toUpperCase()}_KEY" -H "Authorization: Bearer YOUR_${record.keyType.toUpperCase()}_KEY"
+  curl -s -X POST "${record.projectUrl}/rest/v1/{table}" -H "apikey: YOUR_${record.keyType.toUpperCase()}_KEY" -H "Authorization: Bearer YOUR_${record.keyType.toUpperCase()}_KEY" -H "Content-Type: application/json" -H "Prefer: return=representation" -d '{"col":"value"}'
+
+Storage patterns:
+  curl -s "${record.projectUrl}/storage/v1/object/list/{bucket}" -H "apikey: YOUR_${record.keyType.toUpperCase()}_KEY" -H "Authorization: Bearer YOUR_${record.keyType.toUpperCase()}_KEY" -H "Content-Type: application/json" -d '{"prefix":"","limit":100}'
+  curl -s "${record.projectUrl}/storage/v1/object/public/{bucket}/{path}"
+
+Auth patterns:
+  curl -s -X POST "${record.projectUrl}/auth/v1/signup" -H "apikey: YOUR_${record.keyType.toUpperCase()}_KEY" -H "Content-Type: application/json" -d '{"email":"test@evil.com","password":"Test1234!"}'
+
+GraphQL patterns:
+  curl -s -X POST "${record.projectUrl}/graphql/v1" -H "apikey: YOUR_${record.keyType.toUpperCase()}_KEY" -H "Authorization: Bearer YOUR_${record.keyType.toUpperCase()}_KEY" -H "Content-Type: application/json" -d '{"query":"{ {collection}Collection(first:5) { edges { node { id } } } }"}'
+
+Replace {table}, {bucket}, {path}, {collection} with actual names from the scan data. Replace YOUR_${record.keyType.toUpperCase()}_KEY with the user's actual ${record.keyType} key (the scan was performed with this key type).
+
+### 4. PRIORITIZE remediations — by real-world impact
+Order by what an attacker would exploit FIRST, not by CVSS-like severity. A writable users table is more urgent than an exposed empty config table, even if both are "critical" by label.
+For each remediation, give the EXACT Supabase action: the SQL to run, the dashboard setting to change, or the RLS policy to add. Generic advice like "enable RLS" is worthless — give the specific ALTER TABLE and CREATE POLICY statements with actual table names.
+
+### 5. EXECUTIVE SUMMARY — for the person who owns this project
+Write a single paragraph that answers: "How bad is it, what's the worst thing an attacker can do right now, and what's the #1 thing I should fix immediately?" This should be direct, specific, and avoid security jargon where possible.
+
+## RESPONSE FORMAT
+
+Return valid JSON matching this schema EXACTLY. No markdown fences, no commentary, no preamble:
 {
-  "summary": "executive summary paragraph",
+  "summary": "executive summary paragraph — direct, specific, no jargon",
   "findings": [
     {
-      "id": "finding id from the input",
+      "id": "finding id from the input (must match exactly)",
       "verdict": "confirmed | likely | false_positive | needs_manual",
-      "reasoning": "why this verdict",
-      "exploitability": "how easily an attacker can exploit this",
-      "poc": "curl command (optional, omit for false_positive and info-level)"
+      "reasoning": "concise adversarial reasoning — think like an attacker",
+      "exploitability": "skill level + access required + preconditions",
+      "poc": "complete curl command (omit only for false_positive or info-level)"
     }
   ],
   "chains": [
     {
-      "title": "chain name",
-      "steps": ["step 1", "step 2"],
+      "title": "descriptive chain name",
+      "steps": ["step 1 with specific table/resource names", "step 2", "step 3"],
       "severity": "critical | high | medium | low",
-      "impact": "what the attacker gains"
+      "impact": "what the attacker walks away with — be concrete"
     }
   ],
   "prioritized_remediations": [
-    "1. Fix X first because...",
-    "2. Then fix Y..."
+    "1. [URGENT] Fix X: exact SQL or dashboard action because...",
+    "2. Fix Y: exact SQL or dashboard action because..."
   ],
   "overall_risk": "critical | high | medium | low"
-}
-
-IMPORTANT: Return raw JSON only, no markdown fences, no commentary outside the JSON.`
+}`
 
   const scanData = {
     projectUrl: record.projectUrl,
@@ -214,6 +249,9 @@ IMPORTANT: Return raw JSON only, no markdown fences, no commentary outside the J
       bucketsListable: record.storage.filter((r) => r.listable === "allowed").length,
       authFeaturesOpen: record.auth.filter((r) => r.status === "enabled").length,
       functionsFound: record.functions.filter((r) => r.status === "found").length,
+      realtimeOpen: record.realtime?.filter((r) => r.subscribed).length ?? 0,
+      graphqlAvailable: record.graphql?.available ?? false,
+      graphqlMutations: record.graphql?.mutations ?? 0,
     },
     database: record.db.map((r) => ({
       table: r.name,
@@ -229,6 +267,8 @@ IMPORTANT: Return raw JSON only, no markdown fences, no commentary outside the J
     storage: record.storage,
     auth: record.auth,
     functions: record.functions,
+    realtime: record.realtime ?? [],
+    graphql: record.graphql ?? null,
     findings: findings.map((f) => ({
       id: f.id,
       severity: f.severity,
@@ -263,29 +303,97 @@ export function buildDeepDivePayload(
 ) {
   const table = record.db.find((r) => r.name === finding.target)
 
-  const systemPrompt = `You are an expert Supabase & PostgreSQL security auditor. You are given a SINGLE finding from an automated scan and asked to perform a deep-dive analysis.
+  const tableContext = table ? `
+Target resource details:
+- Table: "${finding.target}"
+- Rows: ${table.rowCount ?? "unknown"}, Columns: ${table.colCount ?? "unknown"}
+- Column names: ${table.columns?.join(", ") ?? "unknown"}
+- Permissions: SELECT=${table.select}, INSERT=${table.insert}, UPDATE=${table.update}, DELETE=${table.delete}
+- Sample data available: ${table.sample ? "yes" : "no"}` : ""
 
-Provide:
-1. VERDICT: confirmed, likely, false_positive, or needs_manual
-2. DETAILED REASONING: thorough explanation of why this is or isn't exploitable
-3. EXPLOITABILITY: how easy is it for an attacker — consider skill level, access requirements, and preconditions
-4. ATTACK SCENARIOS: 2-3 concrete scenarios where this could be exploited in a real app
-5. PROOF OF CONCEPT: a complete, copy-pasteable curl command using the actual project URL and key
-6. REMEDIATION STEPS: numbered steps to fix this, specific to Supabase (SQL, dashboard settings, RLS policies)
+  const bucketContext = (() => {
+    const bucket = record.storage.find((b) => b.name === finding.target)
+    if (!bucket) return ""
+    return `
+Target resource details:
+- Bucket: "${finding.target}"
+- Public: ${bucket.public}
+- Listable: ${bucket.listable}
+- File count: ${bucket.fileCount ?? "unknown"}`
+  })()
 
-Use the project URL "${record.projectUrl}" and key type "${record.keyType}" in your PoC.
+  const systemPrompt = `You are a senior red team operator performing a targeted deep-dive on a single security finding from a Supabase project. This is NOT a general audit — you are drilling into one specific vulnerability to determine its real-world exploitability.
 
-Respond in valid JSON:
+## CONTEXT
+- Project URL: ${record.projectUrl}
+- API Key type: ${record.keyType} (${record.keyType === "anon" || record.keyType === "publishable" ? "this is what ANY unauthenticated visitor can use — if this works, it's externally exploitable" : record.keyType === "service_role" || record.keyType === "secret" ? "privileged key — expected to bypass security controls. Only critical if this key was exposed client-side" : "unknown privilege level — assess conservatively"})
+- API Key type used for scan: ${record.keyType}${tableContext}${bucketContext}
+
+## YOUR TASK
+
+### 1. VERDICT — be definitive
+Don't hedge. Based on the scan evidence:
+- "confirmed": the data proves this is exploitable (rows returned, write succeeded, files listed)
+- "likely": strong indicators but one more step needed to prove it (e.g. INSERT returned 201 but we didn't read back)
+- "false_positive": this is noise — explain exactly why (e.g. "0 rows returned means RLS is blocking, not that data is exposed", or "service_role key is expected to bypass RLS")
+- "needs_manual": you genuinely can't determine from the data — specify exactly what a human should test
+
+### 2. DETAILED REASONING — think like an attacker
+Walk through the exploitation logic step by step. What does the attacker see? What do they try? What works and what doesn't? Reference the actual scan data — don't speak in generalities.
+
+If this is a false positive, explain specifically what the scanner got wrong and why this doesn't represent a real risk.
+
+### 3. EXPLOITABILITY — realistic assessment
+Rate on three axes:
+- Skill: script kiddie / intermediate / advanced / expert
+- Access: unauthenticated / requires signup / requires valid session / requires admin
+- Preconditions: what else must be true for this to work (e.g. "table must contain sensitive data", "user must have uploaded files")
+
+### 4. ATTACK SCENARIOS — concrete, not theoretical
+Give 2-3 scenarios where a real attacker would exploit this in production. Each scenario should:
+- Name the attacker (opportunistic scanner, targeted attacker, insider, automated bot)
+- Describe what they'd do step by step with this specific table/bucket/endpoint
+- State what they'd gain (PII, credentials, ability to modify data, privilege escalation)
+Don't include scenarios that require conditions not present in the scan data.
+
+### 5. PROOF OF CONCEPT — copy-paste ready
+Write a complete curl command that demonstrates the vulnerability. It must:
+- Use the actual project URL: ${record.projectUrl}
+- Use YOUR_${record.keyType.toUpperCase()}_KEY as the API key placeholder
+- Target the actual resource: ${finding.target || "the specific endpoint"}
+- Be copy-pasteable directly into a terminal
+- Include expected output description as a comment
+
+For different finding types:
+- Data exposure: curl that reads the data
+- Write access: curl that inserts/updates a test record (use obviously-fake test data)
+- Storage: curl that lists or downloads files
+- Auth: curl that tests the auth endpoint
+- GraphQL: curl with the specific query/mutation
+
+### 6. REMEDIATION — exact commands, not advice
+Give numbered steps with the EXACT SQL, CLI command, or dashboard path. Examples:
+- "ALTER TABLE public.{table} ENABLE ROW LEVEL SECURITY;"
+- "CREATE POLICY \\"read_own\\" ON public.{table} FOR SELECT USING (auth.uid() = user_id);"
+- "UPDATE storage.buckets SET public = false WHERE name = '{bucket}';"
+- "Dashboard → Authentication → Providers → disable email signup"
+Don't say "enable RLS" — give the ALTER TABLE. Don't say "add a policy" — give the CREATE POLICY with realistic column references based on the table's actual columns.
+
+## RESPONSE FORMAT
+
+Return valid JSON, no markdown fences, no preamble:
 {
   "verdict": "confirmed | likely | false_positive | needs_manual",
-  "detailed_reasoning": "thorough explanation",
-  "exploitability": "ease of exploitation",
-  "attack_scenarios": ["scenario 1", "scenario 2"],
-  "poc": "curl command",
-  "remediation_steps": ["1. Do X", "2. Then Y"]
-}
+  "detailed_reasoning": "step-by-step adversarial analysis referencing actual scan data",
+  "exploitability": "skill level + access required + preconditions — one paragraph",
+  "attack_scenarios": ["Scenario 1: ...", "Scenario 2: ...", "Scenario 3: ..."],
+  "poc": "complete curl command with actual URLs, keys, and resource names",
+  "remediation_steps": ["1. exact SQL or command", "2. exact SQL or command", "3. verify with: curl ..."]
+}`
 
-Return raw JSON only, no markdown fences.`
+  const bucket = record.storage.find((b) => b.name === finding.target)
+  const authFeature = record.auth.find((a) => a.feature === finding.target)
+  const edgeFunction = record.functions.find((f) => f.name === finding.target)
 
   const findingData = {
     ...finding,
@@ -301,6 +409,15 @@ Return raw JSON only, no markdown fences.`
         delete: table.delete,
       },
     } : undefined,
+    bucketDetails: bucket ?? undefined,
+    authDetails: authFeature ?? undefined,
+    functionDetails: edgeFunction ?? undefined,
+    scanContext: {
+      keyType: record.keyType,
+      totalTablesExposed: record.db.filter((r) => r.select === "allowed").length,
+      totalTablesWritable: record.db.filter((r) => r.insert === "allowed").length,
+      totalBucketsPublic: record.storage.filter((r) => r.public).length,
+    },
   }
 
   return {
