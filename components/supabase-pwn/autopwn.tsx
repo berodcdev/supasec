@@ -32,6 +32,7 @@ import {
   clearScanHistory,
   diffHasChanges,
   diffScans,
+  loadAIAnalysis,
   loadLastScan,
   loadScanHistory,
   saveScan,
@@ -81,6 +82,7 @@ import {
   type FindingSeverity,
 } from "@/lib/findings"
 import { isSensitiveColumn } from "@/lib/sensitive"
+import type { AIAnalysis } from "@/lib/ai-analysis"
 import { AIAnalysisPanel, AskAIFindingButton } from "@/components/supabase-pwn/ai-analysis"
 
 // ---------------------------------------------------------------------------
@@ -1373,7 +1375,8 @@ export function AutoPwn() {
 
   const handleExportMarkdown = useCallback(() => {
     if (!exportableScan) return
-    const md = formatMarkdownReport(exportableScan)
+    const ai = loadAIAnalysis(exportableScan.projectUrl, exportableScan.timestamp) as AIAnalysis | null
+    const md = formatMarkdownReport(exportableScan, ai)
     downloadFile(`${reportFilenameBase(exportableScan)}.md`, md, "text/markdown")
   }, [exportableScan])
 
@@ -1393,7 +1396,8 @@ export function AutoPwn() {
 
   const handleExportHtml = useCallback(() => {
     if (!exportableScan) return
-    const html = formatHtmlReport(exportableScan)
+    const ai = loadAIAnalysis(exportableScan.projectUrl, exportableScan.timestamp) as AIAnalysis | null
+    const html = formatHtmlReport(exportableScan, ai)
     downloadFile(`${reportFilenameBase(exportableScan)}.html`, html, "text/html")
   }, [exportableScan])
 

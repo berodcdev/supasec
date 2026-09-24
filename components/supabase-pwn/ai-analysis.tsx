@@ -15,6 +15,7 @@ import {
   EyeOff,
   Key,
   Loader2,
+  Play,
   RotateCcw,
   Settings,
   Shield,
@@ -44,6 +45,7 @@ import {
   type ModelTier,
 } from "@/lib/ai-analysis"
 import { downloadFile } from "@/lib/scan-report"
+import { parseCurl } from "@/lib/parse-curl"
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -67,6 +69,124 @@ import {
 } from "@/components/supabase-pwn/shared/status-badge"
 import { ReticlePanel } from "@/components/supabase-pwn/shared/reticle-panel"
 import { EmptyState } from "@/components/supabase-pwn/shared/empty-state"
+
+// -- Run PoC inline -------------------------------------------------------
+
+type PocResult = {
+  status: number
+  statusText: string
+  headers: Record<string, string>
+  body: string
+  truncated: boolean
+}
+
+function RunPocInline({ poc }: { poc: string }) {
+  const [running, setRunning] = useState(false)
+  const [result, setResult] = useState<PocResult | null>(null)
+  const [error, setError] = useState<string | null>(null)
+
+  const parsed = useMemo(() => parseCurl(poc), [poc])
+
+  const handleRun = useCallback(async () => {
+    if (!parsed) return
+    setRunning(true)
+    setError(null)
+    setResult(null)
+
+    try {
+      const res = await fetch("/api/run-poc", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          url: parsed.url,
+          method: parsed.method,
+          headers: parsed.headers,
+          body: parsed.body,
+        }),
+      })
+
+      const data = await res.json()
+
+      if (!res.ok) {
+        setError((data as { error?: string }).error ?? `HTTP ${res.status}`)
+        return
+      }
+
+      setResult(data as PocResult)
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Request failed")
+    } finally {
+      setRunning(false)
+    }
+  }, [parsed])
+
+  if (!parsed) return null
+
+  const statusColor = result
+    ? result.status < 300
+      ? "text-success"
+      : result.status < 400
+        ? "text-warning"
+        : "text-danger"
+    : ""
+
+  return (
+    <div className="mt-2">
+      <Button
+        variant="outline"
+        size="sm"
+        onClick={handleRun}
+        disabled={running}
+        className="h-6 gap-1.5 border-primary/20 px-2 font-mono text-[9px] uppercase tracking-wider text-primary hover:border-primary/40 hover:bg-primary/5"
+      >
+        {running ? (
+          <Loader2 className="size-2.5 animate-spin" />
+        ) : (
+          <Play className="size-2.5" />
+        )}
+        {running ? "Running…" : "Run PoC"}
+      </Button>
+
+      {error && (
+        <div className="mt-2 rounded-none border border-danger/30 bg-danger/5 px-2.5 py-2 font-mono text-[10px] text-danger">
+          {error}
+        </div>
+      )}
+
+      {result && (
+        <div className="mt-2 space-y-1.5">
+          <div className="flex items-center gap-2">
+            <span className={cn("font-mono text-xs font-bold", statusColor)}>
+              {result.status}
+            </span>
+            <span className="font-mono text-[10px] text-muted-foreground">
+              {result.statusText}
+            </span>
+            {result.headers["content-type"] && (
+              <span className="font-mono text-[9px] text-muted-foreground/50">
+                {result.headers["content-type"].split(";")[0]}
+              </span>
+            )}
+            {result.truncated && (
+              <Badge variant="outline" className="font-mono text-[8px]">
+                truncated
+              </Badge>
+            )}
+          </div>
+          <pre className="max-h-60 overflow-auto rounded-none border border-border bg-background p-2.5 font-mono text-[10px] leading-relaxed text-foreground/80">
+            {(() => {
+              try {
+                return JSON.stringify(JSON.parse(result.body), null, 2)
+              } catch {
+                return result.body
+              }
+            })()}
+          </pre>
+        </div>
+      )}
+    </div>
+  )
+}
 
 // -- Verdict styling ------------------------------------------------------
 
@@ -1166,6 +1286,7 @@ export function AIAnalysisPanel({
                                   <pre className="overflow-auto rounded-none border border-primary/15 bg-background p-2.5 font-mono text-[10px] leading-relaxed text-primary/80">
                                     {af.poc}
                                   </pre>
+                                  <RunPocInline poc={af.poc} />
                                 </div>
                               )}
                             </div>
@@ -1509,6 +1630,7 @@ export function AskAIFindingButton({
                     <pre className="overflow-auto rounded-none border border-primary/15 bg-background p-2.5 font-mono text-[10px] leading-relaxed text-primary/80">
                       {result.poc}
                     </pre>
+                    <RunPocInline poc={result.poc} />
                   </div>
                 )}
 

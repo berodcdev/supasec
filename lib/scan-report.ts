@@ -1,5 +1,6 @@
 import type { ScanRecord } from "./scan-history"
 import { deriveFindings, summarizeFindings, type FindingSeverity } from "./findings"
+import type { AIAnalysis } from "./ai-analysis"
 
 function escapeMd(s: string): string {
   return s.replace(/\|/g, "\\|").replace(/\n/g, " ")
@@ -13,7 +14,7 @@ const SEVERITY_ICON: Record<FindingSeverity, string> = {
   info: "⚪",
 }
 
-export function formatMarkdownReport(record: ScanRecord): string {
+export function formatMarkdownReport(record: ScanRecord, aiAnalysis?: AIAnalysis | null): string {
   const lines: string[] = []
   lines.push(`# Supabase AutoPwn Report`)
   lines.push("")
@@ -159,6 +160,68 @@ export function formatMarkdownReport(record: ScanRecord): string {
     lines.push("")
   }
 
+  // AI Analysis -----------------------------------------------------------
+  if (aiAnalysis) {
+    const VERDICT_ICON: Record<string, string> = {
+      confirmed: "🔴",
+      likely: "🟠",
+      false_positive: "🟢",
+      needs_manual: "🟡",
+    }
+
+    lines.push(`## AI Analysis`)
+    lines.push("")
+    lines.push(`**Overall Risk:** ${aiAnalysis.overall_risk.toUpperCase()}`)
+    lines.push("")
+    lines.push(`### Executive Summary`)
+    lines.push("")
+    lines.push(aiAnalysis.summary)
+    lines.push("")
+
+    if (aiAnalysis.findings.length > 0) {
+      lines.push(`### AI Finding Verdicts`)
+      lines.push("")
+      for (const af of aiAnalysis.findings) {
+        const icon = VERDICT_ICON[af.verdict] ?? "⚪"
+        lines.push(`#### ${icon} ${af.id} — ${af.verdict.toUpperCase()}`)
+        lines.push("")
+        lines.push(`- **Reasoning:** ${af.reasoning}`)
+        lines.push(`- **Exploitability:** ${af.exploitability}`)
+        if (af.poc) {
+          lines.push(`- **PoC:**`)
+          lines.push("```bash")
+          lines.push(af.poc)
+          lines.push("```")
+        }
+        lines.push("")
+      }
+    }
+
+    if (aiAnalysis.chains.length > 0) {
+      lines.push(`### Attack Chains`)
+      lines.push("")
+      for (const chain of aiAnalysis.chains) {
+        lines.push(`#### [${chain.severity.toUpperCase()}] ${chain.title}`)
+        lines.push("")
+        for (let i = 0; i < chain.steps.length; i++) {
+          lines.push(`${i + 1}. ${chain.steps[i]}`)
+        }
+        lines.push("")
+        lines.push(`**Impact:** ${chain.impact}`)
+        lines.push("")
+      }
+    }
+
+    if (aiAnalysis.prioritized_remediations.length > 0) {
+      lines.push(`### Prioritized Remediations`)
+      lines.push("")
+      for (const rem of aiAnalysis.prioritized_remediations) {
+        lines.push(`- ${rem}`)
+      }
+      lines.push("")
+    }
+  }
+
   return lines.join("\n")
 }
 
@@ -182,7 +245,85 @@ const SEV_COLORS: Record<FindingSeverity, { bg: string; fg: string; border: stri
   info: { bg: "#1a1a1a", fg: "#888888", border: "#666666" },
 }
 
-export function formatHtmlReport(record: ScanRecord): string {
+function buildAiHtmlSection(aiAnalysis?: AIAnalysis | null): string {
+  if (!aiAnalysis) return ""
+
+  const VERDICT_COLORS: Record<string, { fg: string }> = {
+    confirmed: { fg: "#ff4444" },
+    likely: { fg: "#ff8800" },
+    false_positive: { fg: "#44aa44" },
+    needs_manual: { fg: "#ffcc00" },
+  }
+
+  const riskClass = `ai-risk ai-risk-${aiAnalysis.overall_risk}`
+
+  const findingsHtml = aiAnalysis.findings
+    .map((af) => {
+      const verdictClass = `ai-verdict ai-verdict-${af.verdict}`
+      const badgeClass = `verdict-badge verdict-${af.verdict}`
+      const vColor = VERDICT_COLORS[af.verdict]?.fg ?? "#888"
+      return `
+      <div class="${verdictClass}">
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">
+          <span class="${badgeClass}">${escapeHtml(af.verdict.replace("_", " "))}</span>
+          <code style="font-size:13px;color:${vColor}">${escapeHtml(af.id)}</code>
+        </div>
+        <div style="font-size:13px;color:#ccc;margin-bottom:6px"><strong>Reasoning:</strong> ${escapeHtml(af.reasoning)}</div>
+        <div style="font-size:13px;color:#aaa;margin-bottom:6px"><strong>Exploitability:</strong> ${escapeHtml(af.exploitability)}</div>
+        ${af.poc ? `<div style="font-size:12px;color:var(--muted);margin-bottom:4px"><strong>Proof of Concept:</strong></div><div class="poc-block">${escapeHtml(af.poc)}</div>` : ""}
+      </div>`
+    })
+    .join("\n")
+
+  const chainsHtml = aiAnalysis.chains
+    .map((chain) => {
+      const sevColor = SEV_COLORS[(chain.severity as FindingSeverity)] ?? SEV_COLORS.medium
+      return `
+      <div class="chain-card">
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">
+          <span class="sev-badge" style="background:${sevColor.border};color:#000;padding:2px 8px;border-radius:4px;font-size:11px;font-weight:700;text-transform:uppercase">${escapeHtml(chain.severity)}</span>
+          <span style="font-size:14px;font-weight:600">${escapeHtml(chain.title)}</span>
+        </div>
+        <ol>${chain.steps.map((s) => `<li>${escapeHtml(s)}</li>`).join("")}</ol>
+        <div class="chain-impact"><strong>Impact:</strong> ${escapeHtml(chain.impact)}</div>
+      </div>`
+    })
+    .join("\n")
+
+  const remHtml = aiAnalysis.prioritized_remediations
+    .map((r) => `<li>${escapeHtml(r)}</li>`)
+    .join("\n")
+
+  return `
+  <section>
+    <h2>🤖 AI Analysis</h2>
+    <div style="margin-bottom:16px">
+      <span style="color:var(--muted);font-size:13px;margin-right:8px">Overall Risk:</span>
+      <span class="${riskClass}">${escapeHtml(aiAnalysis.overall_risk)}</span>
+    </div>
+    <div class="ai-summary">${escapeHtml(aiAnalysis.summary)}</div>
+  </section>
+
+  ${aiAnalysis.findings.length > 0 ? `
+  <section>
+    <h2>AI Finding Verdicts</h2>
+    ${findingsHtml}
+  </section>` : ""}
+
+  ${aiAnalysis.chains.length > 0 ? `
+  <section>
+    <h2>Attack Chains</h2>
+    ${chainsHtml}
+  </section>` : ""}
+
+  ${aiAnalysis.prioritized_remediations.length > 0 ? `
+  <section>
+    <h2>Prioritized Remediations</h2>
+    <ol class="rem-list">${remHtml}</ol>
+  </section>` : ""}`
+}
+
+export function formatHtmlReport(record: ScanRecord, aiAnalysis?: AIAnalysis | null): string {
   const findings = deriveFindings(record)
   const counts = summarizeFindings(findings)
   const exposed = record.db.filter((r) => r.select === "allowed").length
@@ -317,6 +458,32 @@ export function formatHtmlReport(record: ScanRecord): string {
   ul{list-style:none;padding-left:0}
   ul li{padding:4px 0;font-size:14px}
   ul li::before{content:"→ ";color:var(--teal)}
+  .ai-risk{display:inline-block;padding:6px 16px;border-radius:6px;font-size:14px;font-weight:700;text-transform:uppercase;letter-spacing:1px}
+  .ai-risk-critical{background:#2d0a0a;color:#ff4444;border:1px solid #ff4444}
+  .ai-risk-high{background:#2d1a0a;color:#ff8800;border:1px solid #ff8800}
+  .ai-risk-medium{background:#2d2a0a;color:#ffcc00;border:1px solid #ffcc00}
+  .ai-risk-low{background:#0a1a2d;color:#4488ff;border:1px solid #4488ff}
+  .ai-summary{background:var(--surface);border:1px solid var(--border);border-left:3px solid var(--teal);padding:16px 20px;border-radius:6px;font-size:14px;line-height:1.7;margin:16px 0}
+  .ai-verdict{padding:16px 20px;border-radius:6px;margin-bottom:12px}
+  .ai-verdict-confirmed{border-left:3px solid #ff4444;background:#2d0a0a}
+  .ai-verdict-likely{border-left:3px solid #ff8800;background:#2d1a0a}
+  .ai-verdict-false_positive{border-left:3px solid #44aa44;background:#0a2d0a}
+  .ai-verdict-needs_manual{border-left:3px solid #ffcc00;background:#2d2a0a}
+  .verdict-badge{padding:2px 8px;border-radius:4px;font-size:11px;font-weight:700;text-transform:uppercase}
+  .verdict-confirmed{background:#ff4444;color:#000}
+  .verdict-likely{background:#ff8800;color:#000}
+  .verdict-false_positive{background:#44aa44;color:#000}
+  .verdict-needs_manual{background:#ffcc00;color:#000}
+  .poc-block{background:#0a0a0c;border:1px solid var(--border);border-radius:4px;padding:12px 16px;font-family:'SF Mono',Menlo,Consolas,monospace;font-size:12px;overflow-x:auto;white-space:pre-wrap;word-break:break-all;margin:8px 0;color:var(--teal)}
+  .chain-card{background:var(--surface);border:1px solid var(--border);border-radius:6px;padding:16px 20px;margin-bottom:12px}
+  .chain-card ol{list-style:decimal;padding-left:20px;margin:8px 0}
+  .chain-card ol li{padding:4px 0;font-size:13px}
+  .chain-card ol li::before{content:none}
+  .chain-impact{background:rgba(255,68,68,0.1);border:1px solid rgba(255,68,68,0.3);border-radius:4px;padding:8px 12px;font-size:13px;margin-top:8px}
+  .rem-list{list-style:none;padding:0;counter-reset:rem}
+  .rem-list li{counter-increment:rem;padding:8px 12px;font-size:13px;border-bottom:1px solid var(--border)}
+  .rem-list li::before{content:counter(rem) ". ";color:var(--teal);font-weight:700}
+  @media print{.ai-risk-critical,.ai-risk-high,.ai-risk-medium,.ai-risk-low{border-width:2px}.ai-verdict{border-left-width:4px}}
   .footer{text-align:center;padding:32px;color:var(--muted);font-size:12px;border-top:1px solid var(--border);margin-top:40px}
   @page{size:A4;margin:20mm}
 </style>
@@ -425,6 +592,8 @@ export function formatHtmlReport(record: ScanRecord): string {
   }
 
   ${graphqlSection}
+
+  ${buildAiHtmlSection(aiAnalysis)}
 
 </div>
 

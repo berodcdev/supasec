@@ -1,6 +1,6 @@
 "use client"
 
-import { useCallback, useRef, useState } from "react"
+import { useCallback, useRef, useState, useMemo } from "react"
 import {
   FolderOpen,
   Upload,
@@ -11,6 +11,8 @@ import {
   RefreshCw,
   Search,
   Loader2,
+  Layers,
+  FileDown,
 } from "lucide-react"
 
 import { useSupabase } from "@/lib/supabase-context"
@@ -168,6 +170,17 @@ export function StorageExplorer() {
   const [listLimit, setListLimit] = useState(100)
   const [files, setFiles] = useState<FileObject[]>([])
   const [loadingFiles, setLoadingFiles] = useState(false)
+
+  // -- Deep scan state ------------------------------------------------------
+  type DeepFile = FileObject & { path: string }
+  const [deepFiles, setDeepFiles] = useState<DeepFile[]>([])
+  const [deepScanning, setDeepScanning] = useState(false)
+  const [deepProgress, setDeepProgress] = useState("")
+  const deepAbortRef = useRef(false)
+
+  // -- Bulk download state --------------------------------------------------
+  const [bulkDownloading, setBulkDownloading] = useState(false)
+  const [bulkProgress, setBulkProgress] = useState("")
 
   // -- Upload state ---------------------------------------------------------
   const [uploadPath, setUploadPath] = useState("")
@@ -359,6 +372,132 @@ export function StorageExplorer() {
       setLoadingFiles(false)
     }
   }, [client, selectedBucket, listFolder, listLimit, addLog])
+
+  // -- Deep scan (recursive enumeration) ------------------------------------
+
+  const handleDeepScan = useCallback(async () => {
+    if (!client || !selectedBucket) return
+    setDeepScanning(true)
+    setDeepFiles([])
+    deepAbortRef.current = false
+
+    const allFiles: DeepFile[] = []
+    const queue: string[] = [""]
+    let foldersScanned = 0
+
+    addLog("info", `Deep scan started on bucket "${selectedBucket}"`)
+
+    try {
+      while (queue.length > 0 && !deepAbortRef.current) {
+        const prefix = queue.shift()!
+        foldersScanned++
+        setDeepProgress(`${foldersScanned} folders scanned · ${allFiles.length} files found`)
+
+        const { data, error } = await client.storage
+          .from(selectedBucket)
+          .list(prefix || undefined, { limit: 1000 })
+
+        if (error) {
+          addLog("warning", `Deep scan: failed listing "${prefix || "(root)"}": ${error.message}`)
+          continue
+        }
+
+        for (const item of data ?? []) {
+          const fullPath = prefix ? `${prefix}/${item.name}` : item.name
+          if (item.id) {
+            const deepFile: DeepFile = { ...item, path: fullPath }
+            allFiles.push(deepFile)
+
+            const hint = sensitiveFileHint(item.name)
+            if (hint) {
+              addLog(
+                "warning",
+                `🔎 CLUE — sensitive file "${fullPath}" in bucket "${selectedBucket}"`,
+                { bucket: selectedBucket, file: fullPath, matched: hint },
+              )
+            }
+          } else {
+            queue.push(fullPath)
+          }
+        }
+
+        if (foldersScanned > 500) {
+          addLog("warning", "Deep scan: stopped at 500 folders to prevent excessive requests")
+          break
+        }
+      }
+
+      setDeepFiles(allFiles)
+      const totalSize = allFiles.reduce((s, f) => s + (f.metadata?.size ?? 0), 0)
+      setDeepProgress(`Done: ${allFiles.length} files in ${foldersScanned} folders (${formatBytes(totalSize)})`)
+      addLog(
+        "success",
+        `Deep scan complete: ${allFiles.length} files in ${foldersScanned} folders (${formatBytes(totalSize)})`,
+        { fileCount: allFiles.length, folders: foldersScanned, totalBytes: totalSize },
+      )
+    } catch (err) {
+      addLog(
+        "error",
+        err instanceof Error ? err.message : "Unknown error during deep scan",
+        err,
+      )
+    } finally {
+      setDeepScanning(false)
+    }
+  }, [client, selectedBucket, addLog])
+
+  // -- Bulk download --------------------------------------------------------
+
+  const handleBulkDownload = useCallback(async () => {
+    if (!client || !selectedBucket || deepFiles.length === 0) return
+    setBulkDownloading(true)
+
+    const downloadable = deepFiles.filter((f) => f.metadata?.size != null && f.metadata.size > 0)
+    addLog("info", `Bulk download: ${downloadable.length} files from "${selectedBucket}"`)
+
+    let downloaded = 0
+    let failed = 0
+
+    for (const f of downloadable) {
+      setBulkProgress(`${downloaded + 1}/${downloadable.length}: ${f.path}`)
+
+      try {
+        const { data, error } = await client.storage
+          .from(selectedBucket)
+          .download(f.path)
+
+        if (error) {
+          failed++
+          continue
+        }
+
+        if (data) {
+          const blobUrl = URL.createObjectURL(data)
+          const a = document.createElement("a")
+          a.href = blobUrl
+          a.download = f.path.split("/").pop() || f.name
+          document.body.appendChild(a)
+          a.click()
+          a.remove()
+          URL.revokeObjectURL(blobUrl)
+          downloaded++
+        }
+      } catch {
+        failed++
+      }
+
+      // Small delay to avoid overwhelming the browser
+      await new Promise((r) => setTimeout(r, 200))
+    }
+
+    setBulkProgress(`Done: ${downloaded} downloaded, ${failed} failed`)
+    addLog(
+      "success",
+      `Bulk download complete: ${downloaded} files downloaded, ${failed} failed`,
+      { downloaded, failed, total: downloadable.length },
+    )
+    setBulkDownloading(false)
+  }, [client, selectedBucket, deepFiles, addLog])
 
   // -- Upload ---------------------------------------------------------------
 
@@ -765,6 +904,93 @@ export function StorageExplorer() {
                     />
                   </>
                 )}
+
+                <Separator />
+
+                {/* Deep Scan */}
+                <div className="space-y-3">
+                  <div className="flex items-center gap-3">
+                    <Button
+                      onClick={deepScanning ? () => { deepAbortRef.current = true } : handleDeepScan}
+                      disabled={!selectedBucket}
+                      variant={deepScanning ? "destructive" : "outline"}
+                      size="sm"
+                    >
+                      {deepScanning ? (
+                        <Loader2 className="size-3.5 animate-spin" />
+                      ) : (
+                        <Layers className="size-3.5" />
+                      )}
+                      {deepScanning ? "Stop" : "Deep Scan"}
+                    </Button>
+                    {deepFiles.length > 0 && (
+                      <Button
+                        onClick={handleBulkDownload}
+                        disabled={bulkDownloading}
+                        variant="outline"
+                        size="sm"
+                      >
+                        {bulkDownloading ? (
+                          <Loader2 className="size-3.5 animate-spin" />
+                        ) : (
+                          <FileDown className="size-3.5" />
+                        )}
+                        Bulk Download ({deepFiles.length})
+                      </Button>
+                    )}
+                    {(deepProgress || bulkProgress) && (
+                      <span className="font-mono text-[10px] text-muted-foreground">
+                        {bulkDownloading ? bulkProgress : deepProgress}
+                      </span>
+                    )}
+                  </div>
+
+                  {deepFiles.length > 0 && (
+                    <DataTable
+                      className="max-h-96"
+                      rows={deepFiles}
+                      getRowKey={(f, i) => `${f.path}-${i}`}
+                      columns={[
+                        {
+                          key: "path",
+                          header: "Path",
+                          cell: (f) => {
+                            const hint = sensitiveFileHint(f.name)
+                            return (
+                              <div className="flex items-center gap-1.5">
+                                <span className="truncate font-mono text-xs">{f.path}</span>
+                                {hint && (
+                                  <Badge variant="outline" className="shrink-0 border-danger/30 text-danger text-[8px]">
+                                    {hint}
+                                  </Badge>
+                                )}
+                              </div>
+                            )
+                          },
+                        },
+                        {
+                          key: "type",
+                          header: "Type",
+                          cell: (f) => (
+                            <span className="text-xs text-muted-foreground">
+                              {f.metadata?.mimetype ?? "-"}
+                            </span>
+                          ),
+                        },
+                        {
+                          key: "size",
+                          header: "Size",
+                          align: "right" as const,
+                          cell: (f) => (
+                            <span className="text-xs text-muted-foreground">
+                              {f.metadata?.size != null ? formatBytes(f.metadata.size) : "-"}
+                            </span>
+                          ),
+                        },
+                      ]}
+                    />
+                  )}
+                </div>
               </CardContent>
             </Card>
           </TabsContent>
