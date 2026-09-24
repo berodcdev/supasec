@@ -228,6 +228,28 @@
   }
 }
 
+@keyframes boot-fade-up {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes log-in {
+  from {
+    opacity: 0;
+    transform: translateX(-6px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
 @keyframes reticle-pulse {
   0%,
   100% {
@@ -259,11 +281,23 @@
   .animate-reticle-pulse {
     animation: reticle-pulse 2s ease-in-out infinite;
   }
+
+  /* Boot-in: elements draw up on mount. Stagger via inline animation-delay. */
+  .boot-in {
+    animation: boot-fade-up 0.5s cubic-bezier(0.2, 0.7, 0.2, 1) both;
+  }
+
+  /* Each new log row slides in. */
+  .log-row-enter {
+    animation: log-in 0.22s ease both;
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {
   .animate-scan-sweep::after,
-  .animate-reticle-pulse {
+  .animate-reticle-pulse,
+  .boot-in,
+  .log-row-enter {
     animation: none !important;
   }
 }

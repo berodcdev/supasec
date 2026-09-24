@@ -98,7 +98,7 @@ const LogRow = React.memo(function LogRow({ entry }: { entry: LogEntry }) {
   return (
     <div
       className={cn(
-        "group flex flex-col border-b border-l-2 border-border/40 px-3 py-1.5 font-mono text-sm hover:bg-muted/30",
+        "log-row-enter group flex flex-col border-b border-l-2 border-border/40 px-3 py-1.5 font-mono text-sm hover:bg-muted/30",
         meta.rail,
       )}
     >

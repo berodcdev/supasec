@@ -249,12 +249,12 @@ export function InitForm() {
 
   return (
     <Collapsible open={isOpen} onOpenChange={setIsOpen}>
-      <Card className="relative rounded-none border-primary/25 bg-card/50">
-        {/* datum registration corners */}
-        <span className="datum-corner left-0 top-0 border-l border-t" />
-        <span className="datum-corner right-0 top-0 border-r border-t" />
-        <span className="datum-corner bottom-0 left-0 border-b border-l" />
-        <span className="datum-corner bottom-0 right-0 border-b border-r" />
+      <Card className="boot-in relative rounded-none border-primary/25 bg-card/50">
+        {/* datum registration corners — staggered draw-in */}
+        <span className="datum-corner boot-in left-0 top-0 border-l border-t" style={{ animationDelay: "0.15s" }} />
+        <span className="datum-corner boot-in right-0 top-0 border-r border-t" style={{ animationDelay: "0.22s" }} />
+        <span className="datum-corner boot-in bottom-0 left-0 border-b border-l" style={{ animationDelay: "0.29s" }} />
+        <span className="datum-corner boot-in bottom-0 right-0 border-b border-r" style={{ animationDelay: "0.36s" }} />
         <CardHeader>
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
