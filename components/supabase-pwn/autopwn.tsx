@@ -1554,7 +1554,10 @@ export function AutoPwn() {
           {/* Start / Abort button */}
           <div className="flex items-center gap-3">
             {!scanning ? (
-              <Button onClick={handleStartScan} className="gap-2">
+              <Button
+                onClick={handleStartScan}
+                className="gap-2 rounded-sm bg-armed font-mono uppercase tracking-widest text-armed-foreground shadow-[0_0_20px_-6px_var(--color-armed)] hover:bg-armed/90"
+              >
                 <Play className="size-4" />
                 Start Scan
               </Button>

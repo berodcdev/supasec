@@ -131,7 +131,11 @@ export function ReconDashboard() {
             <StatusBadge severity={KEY_SEVERITY[keyType] ?? "neutral"} dot={false}>
               {keyType}
             </StatusBadge>
-            <Button size="sm" onClick={triggerScan}>
+            <Button
+              size="sm"
+              onClick={triggerScan}
+              className="bg-armed font-mono uppercase tracking-wider text-armed-foreground hover:bg-armed/90"
+            >
               <Play className="size-3.5" />
               Run scan
             </Button>
