@@ -2067,7 +2067,7 @@ export function AutoPwn() {
                     {f.severity}
                   </SeverityBadge>
                   <span className="flex-1 text-sm font-medium">{f.title}</span>
-                  <AskAIFindingButton finding={f} scanRecord={exportableScan} />
+                  <AskAIFindingButton finding={f} scanRecord={exportableScan} supabaseKey={apiKey} />
                 </div>
                 <p className="text-xs text-muted-foreground">
                   <span className="text-foreground/70">Evidence:</span>{" "}
@@ -2088,7 +2088,7 @@ export function AutoPwn() {
       {/* AI Analysis                                                          */}
       {/* ------------------------------------------------------------------- */}
       {phase === "complete" && findings.length > 0 && (
-        <AIAnalysisPanel scanRecord={exportableScan} findings={findings} />
+        <AIAnalysisPanel scanRecord={exportableScan} findings={findings} supabaseKey={apiKey} />
       )}
 
       {/* ------------------------------------------------------------------- */}
