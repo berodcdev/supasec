@@ -9,7 +9,7 @@ import {
   type SeparatorProps,
 } from "react-resizable-panels"
 import { cn } from "@/lib/utils"
-import { GripVertical } from "lucide-react"
+import { GripHorizontal, GripVertical } from "lucide-react"
 
 function ResizablePanelGroup({
   className,
@@ -32,9 +32,10 @@ function ResizablePanel(props: PanelProps) {
 
 function ResizableHandle({
   withHandle,
+  label,
   className,
   ...props
-}: SeparatorProps & { withHandle?: boolean }) {
+}: SeparatorProps & { withHandle?: boolean; label?: string }) {
   return (
     <Separator
       className={cn(
@@ -44,17 +45,23 @@ function ResizableHandle({
         "focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring",
         // horizontal seam (the log expander): full-width line + tall grab zone
         "data-[orientation=vertical]:h-px data-[orientation=vertical]:w-full data-[orientation=vertical]:after:left-0 data-[orientation=vertical]:after:h-3 data-[orientation=vertical]:after:w-full data-[orientation=vertical]:after:-translate-y-1/2 data-[orientation=vertical]:after:translate-x-0",
-        // rotate the pill for the horizontal seam so the grip reads correctly
-        "[&[data-orientation=vertical]>div]:rotate-90",
+        // rotate the plain grip for the horizontal seam; a labelled pill stays flat
+        !label && "[&[data-orientation=vertical]>div]:rotate-90",
         className
       )}
       {...props}
     >
-      {withHandle && (
-        <div className="group/grip z-10 flex h-9 w-4 items-center justify-center rounded-sm border border-primary/70 bg-card text-primary shadow-[0_0_12px_-2px_var(--color-primary)] transition-colors hover:bg-primary/15">
-          <GripVertical className="h-4 w-3.5" />
-        </div>
-      )}
+      {withHandle &&
+        (label ? (
+          <div className="z-10 flex h-5 items-center gap-1 rounded-sm border border-primary/70 bg-card px-2 font-mono text-[9px] uppercase tracking-widest text-primary shadow-[0_0_12px_-2px_var(--color-primary)] transition-colors hover:bg-primary/15">
+            <GripHorizontal className="h-3 w-3" />
+            {label}
+          </div>
+        ) : (
+          <div className="z-10 flex h-9 w-4 items-center justify-center rounded-sm border border-primary/70 bg-card text-primary shadow-[0_0_12px_-2px_var(--color-primary)] transition-colors hover:bg-primary/15">
+            <GripVertical className="h-4 w-3.5" />
+          </div>
+        ))}
     </Separator>
   )
 }

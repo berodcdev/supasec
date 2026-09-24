@@ -141,7 +141,7 @@ export default function Home() {
             </ResizablePanel>
           </ResizablePanelGroup>
         </ResizablePanel>
-        <ResizableHandle withHandle />
+        <ResizableHandle withHandle label="LOG ↕" />
         <ResizablePanel id="output-log" defaultSize="25%" minSize="10%">
           <OutputLog />
         </ResizablePanel>
