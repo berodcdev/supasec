@@ -18,6 +18,7 @@ import { JsonViewer } from "@/components/supabase-pwn/shared/json-viewer"
 import { SectionHeader } from "@/components/supabase-pwn/shared/section-header"
 import { EmptyState } from "@/components/supabase-pwn/shared/empty-state"
 import { CopyCurl } from "@/components/supabase-pwn/shared/copy-curl"
+import { ResultSkeleton } from "@/components/supabase-pwn/shared/result-skeleton"
 
 // ---------------------------------------------------------------------------
 // Types
@@ -349,6 +350,7 @@ export function EdgeFunctions() {
       </Card>
 
       {/* Response Display */}
+      {loading && <ResultSkeleton label="invoking function" />}
       {result !== null && (
         <Card>
           <CardContent className="p-3">

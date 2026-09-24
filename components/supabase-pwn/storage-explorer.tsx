@@ -31,6 +31,8 @@ import { Separator } from "@/components/ui/separator"
 import { DataTable, type Column } from "@/components/supabase-pwn/shared/data-table"
 import { StatusBadge } from "@/components/supabase-pwn/shared/status-badge"
 import { EmptyState } from "@/components/supabase-pwn/shared/empty-state"
+import { ReticlePanel } from "@/components/supabase-pwn/shared/reticle-panel"
+import { ReticleMark } from "@/components/supabase-pwn/shared/reticle-mark"
 import { sensitiveTableHint, sensitiveFileHint } from "@/lib/sensitive"
 import { toCurl, storageUrl, restHeaders } from "@/lib/curl"
 import { CopyCurl } from "@/components/supabase-pwn/shared/copy-curl"
@@ -668,7 +670,8 @@ export function StorageExplorer() {
       {/* ----------------------------------------------------------------- */}
       {/* Operations (visible after selecting a bucket)                     */}
       {/* ----------------------------------------------------------------- */}
-      {selectedBucket && (
+      {selectedBucket ? (
+        <ReticlePanel active label={`BKT:${selectedBucket}`} className="block">
         <Tabs defaultValue="list" className="w-full">
           <TabsList className="grid w-full grid-cols-6">
             <TabsTrigger value="list" className="gap-1 text-xs">
@@ -1020,6 +1023,17 @@ export function StorageExplorer() {
             </Card>
           </TabsContent>
         </Tabs>
+        </ReticlePanel>
+      ) : (
+        <div className="flex flex-col items-center justify-center gap-2 p-10 text-center">
+          <ReticleMark className="size-10 text-primary/20" />
+          <p className="font-mono text-[11px] uppercase tracking-widest text-muted-foreground">
+            No bucket selected
+          </p>
+          <p className="text-xs text-muted-foreground/60">
+            List Buckets or Bruteforce above to discover them, then pick one.
+          </p>
+        </div>
       )}
     </div>
   )

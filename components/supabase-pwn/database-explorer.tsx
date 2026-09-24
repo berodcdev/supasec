@@ -24,9 +24,11 @@ import { JsonViewer } from "@/components/supabase-pwn/shared/json-viewer"
 import { StatusBadge, type Severity } from "@/components/supabase-pwn/shared/status-badge"
 import { EmptyState } from "@/components/supabase-pwn/shared/empty-state"
 import { ReticlePanel } from "@/components/supabase-pwn/shared/reticle-panel"
+import { ReticleMark } from "@/components/supabase-pwn/shared/reticle-mark"
 import { isSensitiveColumn, sensitiveTableHint, scanJsonForSecrets } from "@/lib/sensitive"
 import { toCurl, restUrl, restHeaders, filtersToParams } from "@/lib/curl"
 import { CopyCurl } from "@/components/supabase-pwn/shared/copy-curl"
+import { ResultSkeleton } from "@/components/supabase-pwn/shared/result-skeleton"
 
 
 // ---------------------------------------------------------------------------
@@ -404,6 +406,7 @@ function SelectTab({
       </div>
 
       {/* Results */}
+      {loading && <ResultSkeleton label="running select" />}
       {result !== null && (
         <Card>
           <CardContent className="p-3">
@@ -1516,8 +1519,14 @@ export function DatabaseExplorer() {
           </>
         ) : (
           <TabsContent value="select">
-            <div className="flex items-center justify-center p-8 text-sm text-muted-foreground">
-              Select a table above to query data.
+            <div className="flex flex-col items-center justify-center gap-2 p-10 text-center">
+              <ReticleMark className="size-10 text-primary/20" />
+              <p className="font-mono text-[11px] uppercase tracking-widest text-muted-foreground">
+                No table selected
+              </p>
+              <p className="text-xs text-muted-foreground/60">
+                Pick a table above — or Bruteforce to discover them.
+              </p>
             </div>
           </TabsContent>
         )}
