@@ -1,6 +1,6 @@
 "use client"
 
-import { Github } from "lucide-react"
+import { Github, Power } from "lucide-react"
 
 import { useSupabase } from "@/lib/supabase-context"
 import { ReticleMark } from "@/components/supabase-pwn/shared/reticle-mark"
@@ -30,7 +30,16 @@ function Cell({
 }
 
 export function Header() {
-  const { initialized, projectUrl, keyType } = useSupabase()
+  const { initialized, projectUrl, keyType, disconnect } = useSupabase()
+
+  function handleDisconnect() {
+    disconnect()
+    try {
+      localStorage.removeItem("supabase-pwn-config")
+    } catch {
+      // ignore
+    }
+  }
 
   const target = (() => {
     if (!projectUrl) return "—"
@@ -82,6 +91,17 @@ export function Header() {
               {initialized ? "ARMED" : "STANDBY"}
             </span>
           </div>
+          {initialized && (
+            <button
+              type="button"
+              onClick={handleDisconnect}
+              className="flex items-center gap-1.5 border-l border-border px-4 font-mono text-[10px] uppercase tracking-widest text-muted-foreground transition-colors hover:text-danger"
+              title="Disconnect"
+            >
+              <Power className="h-3.5 w-3.5" />
+              <span className="hidden sm:inline">Disconnect</span>
+            </button>
+          )}
           <a
             href="https://github.com/BobTheShoplifter/supabase-pwn"
             target="_blank"
