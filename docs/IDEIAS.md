@@ -56,7 +56,7 @@ Consistência & clareza:
 
 Ferramenta pro:
 - [x] **Command palette ⌘K** (M) — pular abas, conectar, run scan, focar tabela; cara de instrumento sério · _feita_
-- [ ] **JSON colapsável** (M) — nós recolhíveis + copiar por nó no JsonViewer (payloads grandes) · `shared/json-viewer.tsx` · _proposta_
+- [x] **JSON colapsável** (M) — JsonViewer com expand/collapse recursivo + item count · _feita_
 
 ## 2026-09-24 · backlog de FEATURES
 Assessment Supabase-specific (maior valor):
@@ -66,7 +66,7 @@ Assessment Supabase-specific (maior valor):
 - [ ] **Probing de pg_graphql** (M) — Supabase expõe `/graphql/v1`; introspection + queries revelam superfície que o REST às vezes esconde · nova aba/peça · _proposta_
 
 Cobertura & workflow:
-- [ ] **Enumeração profunda de storage + bulk** (M) — listar pastas recursivamente e baixar em lote o que estiver exposto · storage-explorer · _proposta_
+- [x] **Enumeração profunda de storage + bulk** (M) — Deep Scan recursivo + Bulk Download no storage explorer · _feita_
 - [ ] **Realtime sweep** (M) — testar postgres_changes em todas as tabelas de uma vez (realtime às vezes entrega o que o SELECT bloqueia) · realtime + autopwn · _proposta_
 - [ ] **Multi-target workspace** (G) — gerenciar vários alvos e alternar; hoje é um por vez · shell/contexto · _proposta_
 - [ ] **Wordlists gerenciáveis** (P) — salvar/editar wordlists de tabela/bucket/função (hoje é campo solto) · nova peça · _proposta_
@@ -76,7 +76,7 @@ Cobertura & workflow:
 
 ## 2026-09-23 · a partir de "Instalador local de um comando"
 - [ ] **Imagem publicada no GHCR (GitHub Action)** (M) — hoje o install builda o source localmente (~1-2min + precisa do repo); uma Action que builda e publica `ghcr.io/berodcdev/supabase-pwn:latest` deixaria o install só `docker run` da imagem, sem clonar/buildar — é o que torna a ferramenta distribuível de verdade · `.github/workflows/`, `install.sh` · _proposta_
-- [ ] **`install.sh --uninstall`** (P) — ferramenta boa também sai limpo: `compose down` + remove imagem/volume; hoje só tem instalar/atualizar · `install.sh` · _proposta_
+- [x] **`install.sh --uninstall`** (P) — compose down + remove imagem/volume/cache + opção de deletar pasta · _feita_
 - [ ] **One-liner `curl | bash`** (P) — o ápice do "um comando": `curl -fsSL .../install.sh | bash` que clona+roda; depende de tornar o repo público (ou servir o script como release asset) · `install.sh`, `README.md` · _proposta_
 
 ## 2026-09-23 · a partir de "Deploy na VPS srv1 (Traefik + Authelia)"
@@ -134,7 +134,7 @@ Cobertura & workflow:
 - [x] **Probing de pg_graphql** (M) — aba GraphQL com introspection, schema browser, query editor e security findings · _feita_
 - [ ] **Realtime sweep no AutoPwn** (M) — testar `postgres_changes` em todas as tabelas descobertas; hoje 0 cobertura de realtime no scan automático, mas a aba manual já tem 6 referências ao protocolo · `components/supabase-pwn/autopwn.tsx`, `realtime.tsx` · _proposta_
 - [ ] **GraphQL findings no AutoPwn** (M) — integrar o probing de `/graphql/v1` no scan automático (introspection + mutations expostas viram findings); hoje 0 referências a GraphQL no autopwn · `components/supabase-pwn/autopwn.tsx`, `graphql-explorer.tsx` · _proposta_
-- [ ] **Report HTML/PDF exportável** (G) — gerar relatório consolidado estilo pentest (executive summary AI + findings + PoCs + remediations) como HTML bonito ou PDF; hoje só há export .md no AI panel e no log · `components/supabase-pwn/ai-analysis.tsx` · _proposta_
+- [x] **Report HTML/PDF exportável** (G) — AI analysis (summary, verdicts, chains, remediations) integrada nos reports HTML e Markdown · _feita_
 
 ## 2026-09-24 · a partir de "Configuração visual premium de OpenRouter API"
 - [x] **Dialog visual premium de OpenRouter** (M) — model cards com tiers, test de conexão, show/hide key, recomendações · _feita_
