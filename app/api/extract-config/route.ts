@@ -18,6 +18,24 @@ const JWT_RE = /eyJ[A-Za-z0-9_-]{10,}\.eyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}
 const PUBLISHABLE_RE = /sb_publishable_[A-Za-z0-9_-]{16,}/g
 const SECRET_RE = /sb_secret_[A-Za-z0-9_-]{16,}/g
 
+// Self-hosted / custom domain detection:
+//   createClient("https://api.example.com", "eyJ...")
+//   createClient('https://supabase.mycompany.com', 'eyJ...')
+//   supabase.createClient(url, key)
+// Also matches SUPABASE_URL / SUPABASE_ANON_KEY env-style patterns in bundles.
+const CREATE_CLIENT_RE =
+  /createClient\s*\(\s*["'`](https?:\/\/[^"'`\s]{5,})["'`]\s*,\s*["'`]([A-Za-z0-9_.-]{20,})["'`]/g
+
+// Env-style constants commonly inlined by bundlers:
+//   NEXT_PUBLIC_SUPABASE_URL:"https://..."
+//   VITE_SUPABASE_URL:"https://..."
+//   REACT_APP_SUPABASE_URL:"https://..."
+//   process.env.SUPABASE_URL = "https://..."
+const ENV_URL_RE =
+  /(?:SUPABASE_URL|SUPABASE_API_URL|SUPABASE_PROJECT_URL)\s*(?:[:=]|"\s*:\s*)\s*["'`](https?:\/\/[^"'`\s]{5,})["'`]/gi
+const ENV_KEY_RE =
+  /(?:SUPABASE_(?:ANON|PUBLISHABLE|SERVICE_ROLE)_KEY|SUPABASE_KEY)\s*(?:[:=]|"\s*:\s*)\s*["'`]([A-Za-z0-9_.-]{20,})["'`]/gi
+
 // Identifier discovery from JS bundles ----------------------------------------
 //   .from('table')   .from("table")
 //   .rpc('fn')       .rpc("fn")
@@ -198,9 +216,36 @@ function extractSameOriginLinks(html: string, baseUrl: string): string[] {
   return out
 }
 
+function looksLikeSupabaseEndpoint(url: string): boolean {
+  try {
+    const u = new URL(url)
+    if (u.hostname.endsWith(".supabase.co") || u.hostname.endsWith(".supabase.in")) return true
+    if (u.pathname.startsWith("/rest/v1") || u.pathname.startsWith("/auth/v1") ||
+        u.pathname.startsWith("/storage/v1") || u.pathname.startsWith("/graphql/v1") ||
+        u.pathname.startsWith("/functions/v1") || u.pathname.startsWith("/realtime/v1")) return true
+    return false
+  } catch {
+    return false
+  }
+}
+
+function refFromUrl(url: string): string {
+  try {
+    const u = new URL(url)
+    if (u.hostname.endsWith(".supabase.co") || u.hostname.endsWith(".supabase.in")) {
+      return u.hostname.split(".")[0].toLowerCase()
+    }
+    return u.hostname.replace(/[^a-z0-9]/g, "-")
+  } catch {
+    return "unknown"
+  }
+}
+
 function scanForSupabase(text: string, source: string): ExtractHit | null {
   const urlMatches = new Set<string>()
   const refs = new Set<string>()
+
+  // 1) Standard *.supabase.co/in URLs
   let urlMatch: RegExpExecArray | null
   SUPABASE_URL_RE.lastIndex = 0
   while ((urlMatch = SUPABASE_URL_RE.exec(text)) !== null) {
@@ -208,9 +253,57 @@ function scanForSupabase(text: string, source: string): ExtractHit | null {
     refs.add(urlMatch[1].toLowerCase())
   }
 
+  // 2) createClient("url", "key") — catches self-hosted and custom domains
   const keys: FoundKey[] = []
   const seenKeys = new Set<string>()
 
+  CREATE_CLIENT_RE.lastIndex = 0
+  let ccMatch: RegExpExecArray | null
+  while ((ccMatch = CREATE_CLIENT_RE.exec(text)) !== null) {
+    const ccUrl = ccMatch[1]
+    const ccKey = ccMatch[2]
+    urlMatches.add(ccUrl)
+    refs.add(refFromUrl(ccUrl))
+
+    if (!seenKeys.has(ccKey)) {
+      seenKeys.add(ccKey)
+      if (ccKey.startsWith("eyJ")) {
+        const { kind, ref } = classifyJwt(ccKey)
+        if (kind !== "unknown_jwt") keys.push({ key: ccKey, kind, ref })
+      } else if (ccKey.startsWith("sb_publishable_")) {
+        keys.push({ key: ccKey, kind: "publishable" })
+      } else if (ccKey.startsWith("sb_secret_")) {
+        keys.push({ key: ccKey, kind: "secret" })
+      }
+    }
+  }
+
+  // 3) Env-style constants (NEXT_PUBLIC_SUPABASE_URL, VITE_SUPABASE_URL, etc.)
+  ENV_URL_RE.lastIndex = 0
+  let envUrlM: RegExpExecArray | null
+  while ((envUrlM = ENV_URL_RE.exec(text)) !== null) {
+    const envUrl = envUrlM[1]
+    urlMatches.add(envUrl)
+    refs.add(refFromUrl(envUrl))
+  }
+
+  ENV_KEY_RE.lastIndex = 0
+  let envKeyM: RegExpExecArray | null
+  while ((envKeyM = ENV_KEY_RE.exec(text)) !== null) {
+    const envKey = envKeyM[1]
+    if (seenKeys.has(envKey)) continue
+    seenKeys.add(envKey)
+    if (envKey.startsWith("eyJ")) {
+      const { kind, ref } = classifyJwt(envKey)
+      if (kind !== "unknown_jwt") keys.push({ key: envKey, kind, ref })
+    } else if (envKey.startsWith("sb_publishable_")) {
+      keys.push({ key: envKey, kind: "publishable" })
+    } else if (envKey.startsWith("sb_secret_")) {
+      keys.push({ key: envKey, kind: "secret" })
+    }
+  }
+
+  // 4) Standalone JWTs (anon/service_role)
   let jwtMatch: RegExpExecArray | null
   JWT_RE.lastIndex = 0
   while ((jwtMatch = JWT_RE.exec(text)) !== null) {
@@ -222,6 +315,7 @@ function scanForSupabase(text: string, source: string): ExtractHit | null {
     keys.push({ key: tok, kind, ref })
   }
 
+  // 5) Standalone sb_publishable_ / sb_secret_ keys
   let pubMatch: RegExpExecArray | null
   PUBLISHABLE_RE.lastIndex = 0
   while ((pubMatch = PUBLISHABLE_RE.exec(text)) !== null) {
@@ -242,7 +336,7 @@ function scanForSupabase(text: string, source: string): ExtractHit | null {
 
   const projectUrl = [...urlMatches][0]
   const ref = projectUrl
-    ? new URL(projectUrl).hostname.split(".")[0].toLowerCase()
+    ? refFromUrl(projectUrl)
     : [...refs][0]
 
   return { source, projectUrl, ref, keys }
@@ -333,8 +427,14 @@ function buildCandidates(hits: ExtractHit[]): Candidate[] {
     const usable = keys.filter((k) => k.kind !== "secret")
     if (usable.length === 0) continue
     usable.sort((a, b) => rankKind(b.kind) - rankKind(a.kind))
+    // If ref looks like a Supabase project hash (20-char alphanum), reconstruct the URL.
+    // Otherwise it's a self-hosted ref slug — we can't guess the URL.
+    const inferredUrl = /^[a-z]{20}$/.test(ref)
+      ? `https://${ref}.supabase.co`
+      : null
+    if (!inferredUrl) continue
     candidates.push({
-      projectUrl: `https://${ref}.supabase.co`,
+      projectUrl: inferredUrl,
       ref,
       apiKey: usable[0].key,
       keyKind: usable[0].kind,
@@ -387,6 +487,9 @@ async function processEntry(
   const cap = Math.max(0, MAX_SCRIPTS - scannedScripts.size)
   const toFetch = newScripts.slice(0, cap)
 
+  // Track chunks that import other chunks (1 level deep)
+  const childChunks = new Set<string>()
+
   await runConcurrent(
     toFetch,
     async (u) => {
@@ -398,9 +501,40 @@ async function processEntry(
       const idents = scanForIdentifiers(r.body)
       for (const t of idents.tables) identTables.add(t)
       for (const f of idents.functions) identFunctions.add(f)
+
+      // Detect dynamic imports in JS chunks: import("./chunk-abc.js"), import('./chunk-abc.mjs')
+      const importRe = /import\s*\(\s*["'`]([^"'`\s]+\.m?js[^"'`]*)["'`]\s*\)/g
+      let im: RegExpExecArray | null
+      while ((im = importRe.exec(r.body)) !== null) {
+        try {
+          const child = new URL(im[1], u).toString()
+          if (!scannedScripts.has(child)) childChunks.add(child)
+        } catch { /* skip bad URL */ }
+      }
     },
     CONCURRENCY,
   )
+
+  // Follow child chunks (1 level deep) to find lazy-loaded config
+  if (childChunks.size > 0) {
+    const childCap = Math.max(0, MAX_SCRIPTS - scannedScripts.size)
+    const childList = [...childChunks].slice(0, childCap)
+
+    await runConcurrent(
+      childList,
+      async (u) => {
+        scannedScripts.add(u)
+        const r = await fetchWithLimit(u)
+        if (!r) return
+        const h = scanForSupabase(r.body, u)
+        if (h) hits.push(h)
+        const idents = scanForIdentifiers(r.body)
+        for (const t of idents.tables) identTables.add(t)
+        for (const f of idents.functions) identFunctions.add(f)
+      },
+      CONCURRENCY,
+    )
+  }
 
   if (alsoCrawl && crawlBudgetRef.remaining > 0) {
     const links = extractSameOriginLinks(entry.body, entryUrl)

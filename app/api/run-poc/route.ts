@@ -32,9 +32,12 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Invalid URL" }, { status: 400 })
   }
 
-  if (!parsed.hostname.endsWith(".supabase.co") && !parsed.hostname.endsWith(".supabase.in")) {
+  const isSupabaseDomain = parsed.hostname.endsWith(".supabase.co") || parsed.hostname.endsWith(".supabase.in")
+  const hasSupabasePath = /^\/(rest|auth|storage|graphql|functions|realtime)\/v1/.test(parsed.pathname)
+
+  if (!isSupabaseDomain && !hasSupabasePath) {
     return NextResponse.json(
-      { error: "Only Supabase project URLs are allowed" },
+      { error: "Only Supabase project URLs are allowed (*.supabase.co/in or endpoints with /rest/v1, /auth/v1, etc.)" },
       { status: 403 },
     )
   }
