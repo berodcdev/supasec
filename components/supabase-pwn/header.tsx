@@ -48,7 +48,7 @@ export function Header() {
 
       <div className="flex items-stretch justify-between border-b border-border bg-card/40">
         {/* Brand lockup */}
-        <div className="flex items-center gap-2.5 px-4 py-2">
+        <div className="boot-in flex items-center gap-2.5 px-4 py-2">
           <ReticleMark className="size-6 text-primary" />
           <div className="leading-tight">
             <div className="font-mono text-sm font-semibold uppercase tracking-[0.2em] text-foreground">
@@ -67,11 +67,21 @@ export function Header() {
             label="Key"
             value={initialized ? keyType : "—"}
           />
-          <Cell
-            label="Status"
-            value={initialized ? "ARMED" : "STANDBY"}
-            accent={initialized}
-          />
+          <div className="hidden flex-col justify-center border-l border-border px-3 py-1 md:flex">
+            <span className="font-mono text-[9px] uppercase tracking-widest text-muted-foreground">
+              Status
+            </span>
+            <span
+              key={initialized ? "armed" : "standby"}
+              className={`boot-in font-mono text-xs ${
+                initialized
+                  ? "text-armed [text-shadow:0_0_8px_var(--color-armed)]"
+                  : "text-muted-foreground"
+              }`}
+            >
+              {initialized ? "ARMED" : "STANDBY"}
+            </span>
+          </div>
           <a
             href="https://github.com/BobTheShoplifter/supabase-pwn"
             target="_blank"

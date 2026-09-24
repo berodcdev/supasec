@@ -1,6 +1,6 @@
 "use client"
 
-import { uuid } from "@/lib/utils"
+import { cn, uuid } from "@/lib/utils"
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import {
@@ -301,6 +301,28 @@ const SCAN_PRESETS: {
       concurrency: 10,
     },
   },
+]
+
+// Ordered scan phases for the live HUD strip.
+const PHASE_STEPS: {
+  key: ScanPhase
+  label: string
+  enabled: (c: ScanConfig) => boolean
+}[] = [
+  { key: "recon", label: "RECON", enabled: () => true },
+  { key: "database", label: "RLS", enabled: (c) => c.databaseRls },
+  { key: "storage", label: "STORAGE", enabled: (c) => c.storageScan },
+  { key: "auth", label: "AUTH", enabled: (c) => c.authProbing },
+  { key: "functions", label: "EDGE", enabled: (c) => c.edgeFunctions },
+]
+const PHASE_ORDER: ScanPhase[] = [
+  "idle",
+  "recon",
+  "database",
+  "storage",
+  "auth",
+  "functions",
+  "complete",
 ]
 
 // Finding severity → StatusBadge severity (StatusBadge has no "medium"/"low").
@@ -1587,15 +1609,57 @@ export function AutoPwn() {
       {(scanning || phase !== "idle") && (
         <ReticlePanel active={scanning} label={scanning ? "SCAN:RUN" : "SCAN:IDLE"}>
           <Card>
-            <CardContent className="pt-6 space-y-3">
+            <CardContent className="space-y-3 pt-6">
+              {/* Live phase strip */}
+              <div className="flex gap-1">
+                {PHASE_STEPS.filter((s) => s.enabled(config)).map((s) => {
+                  const st =
+                    phase === "complete"
+                      ? "done"
+                      : s.key === phase
+                        ? "active"
+                        : PHASE_ORDER.indexOf(s.key) < PHASE_ORDER.indexOf(phase)
+                          ? "done"
+                          : "pending"
+                  return (
+                    <div key={s.key} className="flex-1 space-y-1">
+                      <div
+                        className={cn(
+                          "relative h-1 overflow-hidden",
+                          st === "done" && "bg-primary",
+                          st === "active" && "animate-scan-sweep bg-armed",
+                          st === "pending" && "bg-border",
+                        )}
+                      />
+                      <div
+                        className={cn(
+                          "font-mono text-[9px] uppercase tracking-widest",
+                          st === "active"
+                            ? "text-armed"
+                            : st === "done"
+                              ? "text-primary"
+                              : "text-muted-foreground/50",
+                        )}
+                      >
+                        {s.label}
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+
               <div className="flex items-center justify-between text-sm">
-                <span className="font-medium">{progressLabel}</span>
-                <span className="font-mono tabular-nums text-muted-foreground">{progress}%</span>
+                <span className="font-mono uppercase tracking-wide">
+                  {progressLabel}
+                </span>
+                <span className="font-mono tabular-nums text-muted-foreground">
+                  {progress}%
+                </span>
               </div>
               <Progress value={progress} active={scanning} />
               {currentItem && (
-                <p className="text-xs text-muted-foreground truncate">
-                  {currentItem}
+                <p className="truncate font-mono text-xs text-muted-foreground">
+                  ▸ {currentItem}
                 </p>
               )}
             </CardContent>

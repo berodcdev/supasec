@@ -42,6 +42,22 @@ Ideia descartada não volta a ser sugerida; o motivo fica registrado.
 - [x] **Testes das funções puras de detecção** (M) — vitest + 30 testes em sensitive/curl/findings · _feita_
 - [ ] **CI rodando test + tsc + eslint** (P) — trava regressões automaticamente; **bloqueado pelo mesmo billing do GitHub Actions** (ver PENDENTE) — o workflow é trivial de adicionar quando o billing voltar · `.github/workflows/` · _blocked_
 
+## 2026-09-23 · backlog de DESIGN / UX (blueprint)
+Momentos de impacto (autoridade):
+- [ ] **Sequência de boot no load** (M) — header/title-block e datum corners "desenham" na entrada; entrada de linha no log (`@starting-style`); tudo sob `prefers-reduced-motion`. É o "brilho" premium · shell/header/output-log · _proposta_
+- [ ] **HUD de scan ao vivo** (M) — durante o AutoPwn: progresso por fase em segmentos + readout do item atual + retículo pulsando (reusa scan-sweep). Transforma o momento-chave · `autopwn.tsx` · _proposta_
+- [ ] **"Target locked" ao conectar** (P) — micro-transição STANDBY→ARMED no header (âmbar acende) confirmando a conexão com peso · `header.tsx` · _proposta_
+
+Consistência & clareza:
+- [ ] **Toasts no tema** (P) — estilizar o sonner (mono, cantos retos, cor por tipo); hoje destoa do blueprint · `components/ui/sonner.tsx` · _proposta_
+- [ ] **Skeletons esquemáticos** (P-M) — áreas de resultado (SELECT/RPC/scan) com placeholder + scan-sweep em vez de "pop"; comunica trabalho · telas de resultado · _proposta_
+- [ ] **Empty states com CTA por aba** (P) — Database sem tabela / Storage sem bucket viram blueprint com ação ("Bruteforce tables") em vez de texto solto · database/storage · _proposta_
+- [ ] **Retículo nos focos que faltam** (P) — canal ativo (realtime) e bucket conectado (storage) ganham o mesmo frame de foco da tabela do DB · realtime/storage · _proposta_
+
+Ferramenta pro:
+- [ ] **Command palette ⌘K** (M) — pular abas, conectar, run scan, focar tabela; cara de instrumento sério · nova peça · _proposta_
+- [ ] **JSON colapsável** (M) — nós recolhíveis + copiar por nó no JsonViewer (payloads grandes) · `shared/json-viewer.tsx` · _proposta_
+
 ## ⏸️ PENDENTE (bloqueado — ação de conta, não código)
 - [ ] **Publicar imagem no GHCR** — a Action (`.github/workflows/docker.yml`) está pronta mas o **GitHub Actions está bloqueado por billing** na conta. Destravar: resolver billing (Settings → Billing) → Action publica no push → tornar o package GHCR público. Alternativa sem Actions: PAT com `write:packages` e publicar manualmente. _blocked_
 
