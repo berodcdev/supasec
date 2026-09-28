@@ -1,4 +1,4 @@
-# Production stack for supabase-pwn.
+# Production stack for supasec.
 #
 #   Internet ──▶ Caddy (:80/:443, auto-HTTPS)
 #                 ├─ auth.<domain>  ─▶ Authelia (login portal + TOTP)
@@ -11,15 +11,21 @@
 # See deploy/README.md for the full first-run checklist (DNS, secrets, TOTP).
 
 services:
-  supabase-pwn:
+  supasec:
     build: .
-    container_name: supabase-pwn
+    container_name: supasec
     restart: unless-stopped
     environment:
       NODE_ENV: production
       NEXT_TELEMETRY_DISABLED: "1"
     expose:
       - "3000" # internal only — never published to the host
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:3000/api/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
     networks:
       - web
 
@@ -48,8 +54,10 @@ services:
     container_name: caddy
     restart: unless-stopped
     depends_on:
-      - authelia
-      - supabase-pwn
+      authelia:
+        condition: service_healthy
+      supasec:
+        condition: service_healthy
     ports:
       - "80:80"
       - "443:443"

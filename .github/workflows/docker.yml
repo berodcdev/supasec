@@ -1,7 +1,7 @@
 name: build-image
 
 # Builds the app and publishes a ready-to-run image to GHCR so machines can run
-# the tool without cloning or building — `docker run ghcr.io/<owner>/supabase-pwn`.
+# the tool without cloning or building — `docker run ghcr.io/<owner>/supasec`.
 on:
   push:
     branches: [master]

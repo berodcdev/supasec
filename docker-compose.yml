@@ -1,12 +1,12 @@
-# Local install — runs supabase-pwn on http://localhost:3000 (loopback only,
+# Local install — runs supasec on http://localhost:3000 (loopback only,
 # so it's reachable ONLY from this machine — no auth needed). Driven by
 # ./install.sh. Supabase credentials are entered in the UI at runtime, so there
 # is nothing to configure here.
 services:
-  supabase-pwn:
+  supasec:
     build: .
-    image: supabase-pwn:latest
-    container_name: supabase-pwn
+    image: supasec:latest
+    container_name: supasec
     environment:
       NODE_ENV: production
       NEXT_TELEMETRY_DISABLED: "1"

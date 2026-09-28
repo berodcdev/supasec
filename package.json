@@ -1,7 +1,25 @@
 {
-  "name": "supabase-pwn",
-  "version": "0.1.0",
-  "private": true,
+  "name": "supasec",
+  "version": "1.0.0",
+  "description": "Supabase security scanner for pentesters and red teams",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/berodcdev/supasec.git"
+  },
+  "keywords": [
+    "supabase",
+    "security",
+    "pentest",
+    "scanner",
+    "rls",
+    "red-team",
+    "offensive-security"
+  ],
+  "author": "Bernardo Rodc",
+  "license": "MIT",
+  "engines": {
+    "node": ">=22"
+  },
   "scripts": {
     "dev": "next dev -H 127.0.0.1",
     "dev:lan": "next dev -H 0.0.0.0",

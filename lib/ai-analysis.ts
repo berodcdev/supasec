@@ -35,7 +35,7 @@ export type AIConfig = {
   model: string
 }
 
-const STORAGE_KEY = "supabase-pwn-ai-config"
+const STORAGE_KEY = "supasec-ai-config"
 
 export function loadAIConfig(): AIConfig | null {
   try {

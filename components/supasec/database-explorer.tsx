@@ -3,7 +3,7 @@
 import { uuid } from "@/lib/utils"
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
-import { Plus, X, Play, Trash2, Wand2, Pencil, Search, Loader2, Upload, FileUp, Shield } from "lucide-react"
+import { Plus, X, Play, Trash2, Wand2, Pencil, Search, Loader2, Upload, FileUp, Shield, Database, Save } from "lucide-react"
 
 import { useSupabase, type RlsPolicy } from "@/lib/supabase-context"
 import { Button } from "@/components/ui/button"
@@ -20,16 +20,18 @@ import {
 } from "@/components/ui/select"
 import { Badge } from "@/components/ui/badge"
 import { Card, CardContent } from "@/components/ui/card"
-import { JsonViewer } from "@/components/supabase-pwn/shared/json-viewer"
-import { StatusBadge, type Severity } from "@/components/supabase-pwn/shared/status-badge"
-import { EmptyState } from "@/components/supabase-pwn/shared/empty-state"
-import { ReticlePanel } from "@/components/supabase-pwn/shared/reticle-panel"
-import { ReticleMark } from "@/components/supabase-pwn/shared/reticle-mark"
+import { JsonViewer } from "@/components/supasec/shared/json-viewer"
+import { StatusBadge, type Severity } from "@/components/supasec/shared/status-badge"
+import { EmptyState } from "@/components/supasec/shared/empty-state"
+import { ReticlePanel } from "@/components/supasec/shared/reticle-panel"
+import { ReticleMark } from "@/components/supasec/shared/reticle-mark"
 import { isSensitiveColumn, sensitiveTableHint, scanJsonForSecrets } from "@/lib/sensitive"
 import { analyzeRlsPolicy, worstRlsSeverity, type RlsSeverity } from "@/lib/rls"
 import { toCurl, restUrl, restHeaders, filtersToParams } from "@/lib/curl"
-import { CopyCurl } from "@/components/supabase-pwn/shared/copy-curl"
-import { ResultSkeleton } from "@/components/supabase-pwn/shared/result-skeleton"
+import { CopyCurl } from "@/components/supasec/shared/copy-curl"
+import { ResultSkeleton } from "@/components/supasec/shared/result-skeleton"
+import { SectionHeader } from "@/components/supasec/shared/section-header"
+import { loadWordlists, saveWordlist, deleteWordlist } from "@/lib/wordlists"
 
 
 // ---------------------------------------------------------------------------
@@ -78,7 +80,7 @@ function generateFakeValue(type: string, columnName: string): unknown {
   const n = (columnName ?? "").toLowerCase()
 
   // Column-name-based hints
-  if (n.includes("email")) return `pwn-${uuid().slice(0, 8)}@j5.no`
+  if (n.includes("email")) return `pwn-${uuid().slice(0, 8)}@iapapi.com`
   if (n.includes("phone")) return "+15550" + String(Math.floor(Math.random() * 100000)).padStart(5, "0")
   if (n.includes("url") || n.includes("website") || n.includes("link")) return "https://example.com"
   if (n.includes("first") && n.includes("name")) return "Jane"
@@ -452,10 +454,10 @@ function SelectTab({
                   {(() => {
                     try {
                       const rows = JSON.parse(result)
-                      if (!Array.isArray(rows)) return <JsonViewer json={result} copyable />
+                      if (!Array.isArray(rows)) return <JsonViewer json={result} copyable wrapperCollapsible />
                       return rows.map((row: Record<string, unknown>, i: number) => (
                         <div key={i} className="group relative">
-                          <JsonViewer json={JSON.stringify(row, null, 2)} />
+                          <JsonViewer json={JSON.stringify(row, null, 2)} wrapperCollapsible />
                           <Button
                             variant="secondary"
                             size="sm"
@@ -468,12 +470,12 @@ function SelectTab({
                         </div>
                       ))
                     } catch {
-                      return <JsonViewer json={result} copyable />
+                      return <JsonViewer json={result} copyable wrapperCollapsible />
                     }
                   })()}
                 </div>
               ) : (
-                <JsonViewer json={result} copyable />
+                <JsonViewer json={result} copyable wrapperCollapsible />
               )}
             </div>
           </CardContent>
@@ -633,7 +635,7 @@ function InsertTab({
         <Card>
           <CardContent className="p-3">
             <div className="max-h-[28rem] overflow-y-auto">
-              <JsonViewer json={result} copyable />
+              <JsonViewer json={result} copyable wrapperCollapsible />
             </div>
           </CardContent>
         </Card>
@@ -817,7 +819,7 @@ function UpdateTab({
         <Card>
           <CardContent className="p-3">
             <div className="max-h-[28rem] overflow-y-auto">
-              <JsonViewer json={result} copyable />
+              <JsonViewer json={result} copyable wrapperCollapsible />
             </div>
           </CardContent>
         </Card>
@@ -918,7 +920,7 @@ function DeleteTab({
         <Card>
           <CardContent className="p-3">
             <div className="max-h-[28rem] overflow-y-auto">
-              <JsonViewer json={result} copyable />
+              <JsonViewer json={result} copyable wrapperCollapsible />
             </div>
           </CardContent>
         </Card>
@@ -1106,7 +1108,7 @@ function RpcTab() {
         <Card>
           <CardContent className="p-3">
             <div className="max-h-[28rem] overflow-y-auto">
-              <JsonViewer json={result} copyable />
+              <JsonViewer json={result} copyable wrapperCollapsible />
             </div>
           </CardContent>
         </Card>
@@ -1283,6 +1285,8 @@ export function DatabaseExplorer() {
   const [selectedTable, setSelectedTable] = useState("")
   const [discovering, setDiscovering] = useState(false)
   const [customWordlist, setCustomWordlist] = useState("")
+  const [savedTableWordlists, setSavedTableWordlists] = useState(() => loadWordlists("table"))
+  const [selectedWordlistName, setSelectedWordlistName] = useState("")
   const [activeOpTab, setActiveOpTab] = useState("select")
   const [updatePrefill, setUpdatePrefill] = useState<{
     data: Record<string, unknown>
@@ -1356,6 +1360,8 @@ export function DatabaseExplorer() {
 
   return (
     <div className="flex h-full flex-col gap-4 p-4">
+      <SectionHeader icon={Database} eyebrow="DATABASE" title="Explore Tables & RLS" />
+
       {/* Table / View selector */}
       <div className="space-y-2">
         <div className="flex items-center justify-between">
@@ -1364,7 +1370,9 @@ export function DatabaseExplorer() {
             variant="outline"
             size="sm"
             disabled={discovering}
+            title="Sends ~130+ requests to probe common table names"
             onClick={async () => {
+              if (!window.confirm("This will send ~130 requests to probe common table names. Continue?")) return
               setDiscovering(true)
               try {
                 const extra = customWordlist
@@ -1383,6 +1391,7 @@ export function DatabaseExplorer() {
               <Search className="h-3.5 w-3.5 mr-1" />
             )}
             {discovering ? "Bruteforcing..." : "Bruteforce Tables"}
+            {!discovering && <span className="ml-1 text-[9px] text-muted-foreground/60">~130 reqs</span>}
           </Button>
         </div>
         <Select value={selectedTable} onValueChange={setSelectedTable}>
@@ -1409,12 +1418,73 @@ export function DatabaseExplorer() {
             ))}
           </SelectContent>
         </Select>
-        <Input
-          placeholder="Custom table names (comma or newline separated)"
-          value={customWordlist}
-          onChange={(e) => setCustomWordlist(e.target.value)}
-          className="text-xs"
-        />
+        <div className="flex items-center gap-1.5">
+          <Input
+            placeholder="Custom table names (comma or newline separated)"
+            value={customWordlist}
+            onChange={(e) => {
+              setCustomWordlist(e.target.value)
+              setSelectedWordlistName("")
+            }}
+            className="text-xs flex-1"
+          />
+          {savedTableWordlists.length > 0 && (
+            <Select
+              value={selectedWordlistName}
+              onValueChange={(name) => {
+                const wl = savedTableWordlists.find((w) => w.name === name)
+                if (wl) {
+                  setCustomWordlist(wl.words.join(", "))
+                  setSelectedWordlistName(name)
+                }
+              }}
+            >
+              <SelectTrigger className="h-9 w-[120px] text-[10px]">
+                <SelectValue placeholder="Saved" />
+              </SelectTrigger>
+              <SelectContent>
+                {savedTableWordlists.map((wl) => (
+                  <SelectItem key={wl.name} value={wl.name} className="text-xs">
+                    {wl.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          )}
+          <Button
+            variant="ghost"
+            size="sm"
+            className="h-9 px-2"
+            title="Save current wordlist"
+            disabled={!customWordlist.trim()}
+            onClick={() => {
+              const name = window.prompt("Wordlist name:", selectedWordlistName || "")
+              if (!name?.trim()) return
+              const words = customWordlist.split(/[,\n]+/).map((s) => s.trim()).filter(Boolean)
+              saveWordlist({ name: name.trim(), words, kind: "table" })
+              setSavedTableWordlists(loadWordlists("table"))
+              setSelectedWordlistName(name.trim())
+            }}
+          >
+            <Save className="size-3.5" />
+          </Button>
+          {selectedWordlistName && (
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-9 px-2 text-danger hover:text-danger"
+              title={`Delete "${selectedWordlistName}"`}
+              onClick={() => {
+                if (!window.confirm(`Delete wordlist "${selectedWordlistName}"?`)) return
+                deleteWordlist("table", selectedWordlistName)
+                setSavedTableWordlists(loadWordlists("table"))
+                setSelectedWordlistName("")
+              }}
+            >
+              <Trash2 className="size-3.5" />
+            </Button>
+          )}
+        </div>
 
         {/* Manual table add (no bruteforce) */}
         <div className="flex items-center gap-2">

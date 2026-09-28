@@ -1,9 +1,9 @@
 "use client"
 
-import { Command, Power } from "lucide-react"
+import { Command, Github, Power } from "lucide-react"
 
 import { useSupabase } from "@/lib/supabase-context"
-import { ReticleMark } from "@/components/supabase-pwn/shared/reticle-mark"
+import { ReticleMark } from "@/components/supasec/shared/reticle-mark"
 
 // One cell of the drawing title-block: a tiny label over a mono value.
 function Cell({
@@ -35,7 +35,7 @@ export function Header() {
   function handleDisconnect() {
     disconnect()
     try {
-      localStorage.removeItem("supabase-pwn-config")
+      localStorage.removeItem("supasec-config")
     } catch {
       // ignore
     }
@@ -61,7 +61,7 @@ export function Header() {
           <ReticleMark className="size-6 text-primary" />
           <div className="leading-tight">
             <div className="font-mono text-sm font-semibold uppercase tracking-[0.2em] text-foreground">
-              supabase<span className="text-primary">·</span>pwn
+              supa<span className="text-primary">·</span>sec
             </div>
             <div className="font-mono text-[9px] uppercase tracking-widest text-muted-foreground">
               offensive recon console
@@ -109,6 +109,15 @@ export function Header() {
             <Command className="h-3 w-3" />
             <span className="hidden sm:inline">⌘K</span>
           </div>
+          <a
+            href="https://github.com/berodcdev/supasec"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="flex items-center border-l border-border px-4 text-muted-foreground transition-colors hover:text-foreground"
+            title="View on GitHub"
+          >
+            <Github className="h-4 w-4" />
+          </a>
         </div>
       </div>
     </header>

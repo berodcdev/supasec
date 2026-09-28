@@ -22,12 +22,12 @@ import {
 import { sensitiveTableHint } from "@/lib/sensitive"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
-import { SectionHeader } from "@/components/supabase-pwn/shared/section-header"
-import { EmptyState } from "@/components/supabase-pwn/shared/empty-state"
+import { SectionHeader } from "@/components/supasec/shared/section-header"
+import { EmptyState } from "@/components/supasec/shared/empty-state"
 import {
   StatusBadge,
   type Severity,
-} from "@/components/supabase-pwn/shared/status-badge"
+} from "@/components/supasec/shared/status-badge"
 
 const FINDING_BADGE: Record<FindingSeverity, Severity> = {
   critical: "critical",

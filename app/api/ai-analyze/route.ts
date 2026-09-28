@@ -31,7 +31,7 @@ export async function POST(req: NextRequest) {
       "Content-Type": "application/json",
       Authorization: `Bearer ${apiKey}`,
       "HTTP-Referer": "http://localhost:3000",
-      "X-Title": "supabase-pwn",
+      "X-Title": "supasec",
     },
     body: JSON.stringify({
       model,

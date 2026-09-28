@@ -13,6 +13,8 @@ import {
   Loader2,
   Layers,
   FileDown,
+  HardDrive,
+  Save,
 } from "lucide-react"
 
 import { useSupabase } from "@/lib/supabase-context"
@@ -30,14 +32,16 @@ import {
 import { Badge } from "@/components/ui/badge"
 import { Card, CardContent } from "@/components/ui/card"
 import { Separator } from "@/components/ui/separator"
-import { DataTable, type Column } from "@/components/supabase-pwn/shared/data-table"
-import { StatusBadge } from "@/components/supabase-pwn/shared/status-badge"
-import { EmptyState } from "@/components/supabase-pwn/shared/empty-state"
-import { ReticlePanel } from "@/components/supabase-pwn/shared/reticle-panel"
-import { ReticleMark } from "@/components/supabase-pwn/shared/reticle-mark"
+import { DataTable, type Column } from "@/components/supasec/shared/data-table"
+import { StatusBadge } from "@/components/supasec/shared/status-badge"
+import { EmptyState } from "@/components/supasec/shared/empty-state"
+import { ReticlePanel } from "@/components/supasec/shared/reticle-panel"
+import { ReticleMark } from "@/components/supasec/shared/reticle-mark"
 import { sensitiveTableHint, sensitiveFileHint } from "@/lib/sensitive"
 import { toCurl, storageUrl, restHeaders } from "@/lib/curl"
-import { CopyCurl } from "@/components/supabase-pwn/shared/copy-curl"
+import { CopyCurl } from "@/components/supasec/shared/copy-curl"
+import { SectionHeader } from "@/components/supasec/shared/section-header"
+import { loadWordlists, saveWordlist, deleteWordlist } from "@/lib/wordlists"
 
 // ---------------------------------------------------------------------------
 // Types
@@ -164,6 +168,8 @@ export function StorageExplorer() {
   const [loadingBuckets, setLoadingBuckets] = useState(false)
   const [bruteforcing, setBruteforcing] = useState(false)
   const [manualBucket, setManualBucket] = useState("")
+  const [savedBucketWordlists, setSavedBucketWordlists] = useState(() => loadWordlists("bucket"))
+  const [selectedWordlistName, setSelectedWordlistName] = useState("")
 
   // -- List files state -----------------------------------------------------
   const [listFolder, setListFolder] = useState("")
@@ -245,6 +251,7 @@ export function StorageExplorer() {
 
   const handleBruteforceBuckets = useCallback(async () => {
     if (!client) return
+    if (!window.confirm("This will send ~60 requests to probe common bucket names. Continue?")) return
     setBruteforcing(true)
     try {
       const extra = manualBucket
@@ -707,6 +714,8 @@ export function StorageExplorer() {
 
   return (
     <div className="space-y-4">
+      <SectionHeader icon={HardDrive} eyebrow="STORAGE" title="Explore Buckets & Files" />
+
       {/* ----------------------------------------------------------------- */}
       {/* Bucket Section                                                    */}
       {/* ----------------------------------------------------------------- */}
@@ -732,6 +741,7 @@ export function StorageExplorer() {
               size="sm"
               onClick={handleBruteforceBuckets}
               disabled={bruteforcing}
+              title="Sends ~60+ requests to probe common bucket names"
             >
               {bruteforcing ? (
                 <Loader2 className="size-3.5 animate-spin" />
@@ -739,6 +749,7 @@ export function StorageExplorer() {
                 <Search className="size-3.5" />
               )}
               {bruteforcing ? "Bruteforcing..." : "Bruteforce Buckets"}
+              {!bruteforcing && <span className="ml-1 text-[9px] text-muted-foreground/60">~60 reqs</span>}
             </Button>
 
             {buckets.length > 0 && (
@@ -781,11 +792,14 @@ export function StorageExplorer() {
             </Select>
           </div>
 
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-1.5">
             <Input
               placeholder="Custom bucket names (comma separated) or type one to add"
               value={manualBucket}
-              onChange={(e) => setManualBucket(e.target.value)}
+              onChange={(e) => {
+                setManualBucket(e.target.value)
+                setSelectedWordlistName("")
+              }}
               className="text-xs flex-1"
               onKeyDown={(e) => {
                 if (e.key === "Enter") {
@@ -794,6 +808,62 @@ export function StorageExplorer() {
                 }
               }}
             />
+            {savedBucketWordlists.length > 0 && (
+              <Select
+                value={selectedWordlistName}
+                onValueChange={(name) => {
+                  const wl = savedBucketWordlists.find((w) => w.name === name)
+                  if (wl) {
+                    setManualBucket(wl.words.join(", "))
+                    setSelectedWordlistName(name)
+                  }
+                }}
+              >
+                <SelectTrigger className="h-9 w-[120px] text-[10px]">
+                  <SelectValue placeholder="Saved" />
+                </SelectTrigger>
+                <SelectContent>
+                  {savedBucketWordlists.map((wl) => (
+                    <SelectItem key={wl.name} value={wl.name} className="text-xs">
+                      {wl.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            )}
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-9 px-2"
+              title="Save current wordlist"
+              disabled={!manualBucket.trim()}
+              onClick={() => {
+                const name = window.prompt("Wordlist name:", selectedWordlistName || "")
+                if (!name?.trim()) return
+                const words = manualBucket.split(/[,\n]+/).map((s) => s.trim()).filter(Boolean)
+                saveWordlist({ name: name.trim(), words, kind: "bucket" })
+                setSavedBucketWordlists(loadWordlists("bucket"))
+                setSelectedWordlistName(name.trim())
+              }}
+            >
+              <Save className="size-3.5" />
+            </Button>
+            {selectedWordlistName && (
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-9 px-2 text-danger hover:text-danger"
+                title={`Delete "${selectedWordlistName}"`}
+                onClick={() => {
+                  if (!window.confirm(`Delete wordlist "${selectedWordlistName}"?`)) return
+                  deleteWordlist("bucket", selectedWordlistName)
+                  setSavedBucketWordlists(loadWordlists("bucket"))
+                  setSelectedWordlistName("")
+                }}
+              >
+                <Trash2 className="size-3.5" />
+              </Button>
+            )}
             <Button
               variant="outline"
               size="sm"

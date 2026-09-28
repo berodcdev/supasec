@@ -20,11 +20,11 @@ import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
 import { Card, CardContent } from "@/components/ui/card"
 import { Textarea } from "@/components/ui/textarea"
-import { JsonViewer } from "@/components/supabase-pwn/shared/json-viewer"
-import { SectionHeader } from "@/components/supabase-pwn/shared/section-header"
-import { ReticlePanel } from "@/components/supabase-pwn/shared/reticle-panel"
-import { EmptyState } from "@/components/supabase-pwn/shared/empty-state"
-import { CopyCurl } from "@/components/supabase-pwn/shared/copy-curl"
+import { JsonViewer } from "@/components/supasec/shared/json-viewer"
+import { SectionHeader } from "@/components/supasec/shared/section-header"
+import { ReticlePanel } from "@/components/supasec/shared/reticle-panel"
+import { EmptyState } from "@/components/supasec/shared/empty-state"
+import { CopyCurl } from "@/components/supasec/shared/copy-curl"
 
 // ---------------------------------------------------------------------------
 // Types

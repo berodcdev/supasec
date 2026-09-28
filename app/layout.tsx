@@ -17,7 +17,7 @@ const jetbrainsMono = JetBrains_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "supabase-pwn",
+  title: "supasec",
   description: "Supabase security testing tool",
 };
 

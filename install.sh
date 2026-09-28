@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
-# supabase-pwn — installer for LOCAL use.
+# supasec — installer for LOCAL use.
 # Runs the tool on http://localhost:<port> (loopback only, no auth).
 #
 # Quick start (clone + install):
-#   git clone https://github.com/berodcdev/supabase-pwn.git
-#   cd supabase-pwn && ./install.sh
+#   git clone https://github.com/berodcdev/supasec.git
+#   cd supasec && ./install.sh
 #
 # Flags:  --port N     port to serve on (default 3000)
 #         --yes        non-interactive (accept defaults)
@@ -13,8 +13,8 @@
 
 set -euo pipefail
 
-REPO_URL="https://github.com/berodcdev/supabase-pwn.git"
-NAME="supabase-pwn"
+REPO_URL="https://github.com/berodcdev/supasec.git"
+NAME="supasec"
 MIN_DOCKER="20.10"
 
 # --- pretty output -----------------------------------------------------------
@@ -43,7 +43,7 @@ while [ $# -gt 0 ]; do
 done
 
 printf '\n%s\n' "${BOLD}┌─────────────────────────────────┐${RESET}"
-printf '%s\n'   "${BOLD}│   ⚡ supabase-pwn · installer   │${RESET}"
+printf '%s\n'   "${BOLD}│   ⚡ supasec · installer   │${RESET}"
 printf '%s\n\n' "${BOLD}└─────────────────────────────────┘${RESET}"
 
 # =============================================================================
@@ -83,7 +83,7 @@ if [ "$UNINSTALL" = 1 ]; then
   fi
 
   say ""
-  ok "${BOLD}supabase-pwn fully uninstalled.${RESET}"
+  ok "${BOLD}supasec fully uninstalled.${RESET}"
   say "${DIM}No containers, images, or build cache remain.${RESET}"
   exit 0
 fi
@@ -263,7 +263,7 @@ done
 
 say ""
 if [ "$HEALTHY" = 1 ]; then
-  ok "${BOLD}supabase-pwn is running!${RESET}"
+  ok "${BOLD}supasec is running!${RESET}"
 else
   warn "App didn't respond in 60s. Check logs: ${DC} logs -f"
 fi

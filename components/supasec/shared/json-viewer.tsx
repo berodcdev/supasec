@@ -154,12 +154,25 @@ function JsonNode({
   )
 }
 
+function jsonSummary(value: unknown): string {
+  if (Array.isArray(value)) {
+    const n = value.length
+    return `[…] ${n} ${n === 1 ? "item" : "items"}`
+  }
+  if (value !== null && typeof value === "object") {
+    const n = Object.keys(value).length
+    return `{…} ${n} ${n === 1 ? "key" : "keys"}`
+  }
+  return String(value)
+}
+
 function JsonViewer({
   json,
   data,
   copyable = false,
   collapsible = true,
   defaultCollapsed = false,
+  wrapperCollapsible = false,
   className,
   padding = "p-3",
 }: {
@@ -168,6 +181,8 @@ function JsonViewer({
   copyable?: boolean
   collapsible?: boolean
   defaultCollapsed?: boolean
+  /** When true, the entire block can be collapsed to a single summary line. */
+  wrapperCollapsible?: boolean
   className?: string
   padding?: string
 }) {
@@ -191,6 +206,9 @@ function JsonViewer({
   }, [parsed])
 
   const [copied, setCopied] = React.useState(false)
+  const [wrapperCollapsed, setWrapperCollapsed] = React.useState(
+    wrapperCollapsible && defaultCollapsed,
+  )
 
   const handleCopy = React.useCallback(async () => {
     try {
@@ -206,6 +224,23 @@ function JsonViewer({
     typeof parsed === "object" &&
     parsed !== null
 
+  if (wrapperCollapsible && wrapperCollapsed && parsed !== undefined) {
+    return (
+      <div
+        className={cn(
+          "flex cursor-pointer items-center gap-1.5 rounded-sm border border-border/60 font-mono text-xs tabular-nums",
+          padding,
+          className,
+        )}
+        style={{ backgroundColor: "var(--color-muted)" }}
+        onClick={() => setWrapperCollapsed(false)}
+      >
+        <ChevronRight className="size-3 shrink-0 text-muted-foreground" />
+        <span className="text-muted-foreground/60">{jsonSummary(parsed)}</span>
+      </div>
+    )
+  }
+
   const block = canCollapse ? (
     <pre
       className={cn(
@@ -218,6 +253,16 @@ function JsonViewer({
         backgroundColor: "var(--color-muted)",
       }}
     >
+      {wrapperCollapsible && (
+        <button
+          type="button"
+          onClick={() => setWrapperCollapsed(true)}
+          className="mb-1 flex items-center gap-1 text-[10px] text-muted-foreground/60 transition-colors hover:text-muted-foreground"
+        >
+          <ChevronRight className="size-3 rotate-90 transition-transform" />
+          <span>collapse</span>
+        </button>
+      )}
       <JsonNode
         value={parsed}
         depth={0}

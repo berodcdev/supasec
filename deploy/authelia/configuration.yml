@@ -12,7 +12,7 @@ log:
 
 # One-time-password (authenticator app) settings.
 totp:
-  issuer: 'supabase-pwn'
+  issuer: 'supasec'
   period: 30
   skew: 1
 

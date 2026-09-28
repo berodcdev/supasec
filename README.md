@@ -1,237 +1,218 @@
 <p align="center">
-  <img src="image-1.png" alt="supabase-pwn — Recon Dashboard" width="700" />
+  <img src="docs/screenshots/findings.png" alt="supasec — Security findings from an automated scan" width="800" />
 </p>
 
-<h1 align="center">supabase-pwn</h1>
+<h1 align="center">supasec</h1>
 
 <p align="center">
-  <strong>The Supabase security testing toolkit for pentesters.</strong><br>
-  Point it at any Supabase project URL + API key and start probing for misconfigurations — exposed tables, broken RLS policies, open signups, leaky storage buckets, unprotected edge functions, and more.
+  <strong>Supabase security scanner for pentesters and red teams.</strong><br>
+  Find exposed tables, broken RLS, open signups, leaky buckets, and unprotected edge functions — before attackers do.
 </p>
 
 <p align="center">
-  <a href="#features">Features</a> · <a href="#getting-started">Getting Started</a> · <a href="#usage">Usage</a> · <a href="#screenshots">Screenshots</a> · <a href="#tech-stack">Tech Stack</a> · <a href="#project-structure">Project Structure</a>
+  <a href="https://github.com/berodcdev/supasec/blob/master/LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue.svg" alt="MIT License" /></a>
+  <img src="https://img.shields.io/badge/node-%3E%3D22-brightgreen" alt="Node >= 22" />
+  <img src="https://img.shields.io/badge/next.js-16-black" alt="Next.js 16" />
+  <img src="https://img.shields.io/badge/docker-ready-2496ED" alt="Docker Ready" />
 </p>
 
-> **For authorized security testing only.** Always get explicit permission before testing projects you don't own.
-
-Inspired by [firepwn-tool](https://github.com/0xbigshaq/firepwn-tool) (Firebase security testing), built for the Supabase ecosystem.
-
----
-
-## Features
-
-### Recon & Dashboard
-
-- **Recon Dashboard** — Overview screen with live stats: tables found, exposed data, key type, findings summary, and recent clues — one-click navigation to any module
-- **Auto-Extract Config** — Paste any web app URL and supabase-pwn crawls its JS bundles looking for Supabase project URLs, API keys (anon, service_role, publishable, secret), `.from()` table names, `.rpc()` functions, and `.functions.invoke()` edge function names
-- **Key Type Auto-Detection** — Automatically identifies anon, service_role, publishable, and secret keys from prefix or JWT payload; badge shown in the header
-
-### Database
-
-- **Database Explorer** — Full CRUD (SELECT / INSERT / UPDATE / DELETE) against any discovered table with a filter builder, fake-data auto-fill, column picker, and PATCH/PUT method toggle
-- **Table & Column Bruteforcer** — When the OpenAPI schema is blocked (publishable keys), bruteforce ~130+ common table names with custom wordlist support; second pass bruteforces columns on blocked tables
-- **RPC Invoker** — Discover functions from the OpenAPI spec, see expected parameters, auto-populate args and invoke
-- **Relationship Traversal (Embedding)** — "Embed" selector on SELECT appends `?select=*,related_table(*)` to probe foreign-key relationships and pull nested data
-- **Mass-Assignment / Escalation Test** — "Escalate" button on INSERT tests for privilege escalation by injecting role/admin fields and detecting if the write succeeds
-- **RLS Policy Analyzer** — Static analysis of RLS policies (imported from schema dump): detects `USING (true)`, missing `WITH CHECK`, no `auth.uid()` references, and ranks issues by severity (critical/high/medium/info)
-
-### Storage
-
-- **Storage Explorer** — List buckets, browse files, upload/download/delete, generate public & signed URLs
-- **Bucket Sensitivity Badges** — Buckets with sensitive names (backup, credentials, private, etc.) flagged with 🔎 in the selector
-- **Sensitive File Detection** — Files like `.env`, `dump.sql`, `backup.tar.gz` flagged during listing
-
-### Auth
-
-- **Auth Probing** — Test sign-up, sign-in, anonymous auth, OAuth redirects, password reset, and inject bearer tokens
-- **Provider Enumeration** — Tests multiple OAuth providers (Google, GitHub, Apple, etc.) and auth methods
-
-### Edge Functions
-
-- **Edge Function Invoker** — Invoke edge functions with custom bodies, headers, and auth tokens
-- **Function Discovery** — "Discover" button bruteforces common function names with chips for found functions
-
-### Realtime
-
-- **Realtime Monitor** — Subscribe to postgres_changes, broadcast events, and presence tracking on any channel
-- **Secret Scanning in Events** — Incoming realtime payloads are scanned for leaked secrets/JWTs
-
-### Automated Scanning
-
-- **AutoPwn Scanner** — Automated multi-phase scan covering Database RLS, Storage, Auth, and Edge Functions with configurable concurrency and custom table names
-- **Findings Engine** — Turns raw scan results into ranked vulnerabilities (critical → info) with evidence, remediation steps, and PII escalation
-- **Scan History & Diff** — Persisted scan results with before/after comparison: new findings (red), fixed findings (green strikethrough), and delta summary
-- **Navigable Findings** — Click any finding to jump to the affected table/bucket in the right module
-- **Markdown Report Export** — "Export session report (.md)" generates a full pentest report with findings table, evidence, and remediation
-
-### Intelligence & Detection
-
-- **Sensitive Column Detection** — Flags columns named password, email, ssn, cpf, credit_card, api_key, etc. with PII badges
-- **Secret Value Detection** — Scans actual cell values for JWTs, AWS keys, Stripe keys, private keys, Supabase keys, emails, bcrypt hashes — even in innocuously-named columns
-- **JWT Decoder** — Automatically decodes JWTs found in data, showing role, expiration, and flags service_role leaks as CRITICAL
-- **Clue System** — All sensitive detections are tagged as 🔎 CLUE in the output log with a dedicated filter chip
-
-### Developer Experience
-
-- **Copy-as-cURL** — Every request (SELECT, INSERT, UPDATE, DELETE, RPC, Edge Function, Storage) has a `curl` button that copies the exact equivalent command
-- **Request History & Replay** — Panel with all executed read requests; one-click replay and copy-as-curl for each
-- **Output Log** — Color-coded activity log with JSON syntax highlighting, timestamps, expandable payloads, clue filter, and persistent storage (survives page reload, last 500 entries)
-- **Telemetry Bar** — Always-visible bottom strip with live counters (INFO/OK/WARN/ERR/🔎), latest log line, and expandable full console; auto-opens on clues or errors
-
-### UI / Design
-
-- **Instrument-Grade Dark UI** — Purpose-built dark theme with monospace typography, datum corners, reticle focus marks, and boot sequence animations
-- **Left Rail Navigation** — Icon sidebar: Recon, Database, Storage, Edge, Realtime, Auth, AutoPwn
-- **HUD Scan Bar** — Live scan progress with phase indicators (done/active/pending) and sweep animation
-- **Skeleton Loading States** — Schematic scan-sweep skeletons for SELECT, Edge, and RPC results
-- **Empty States with CTAs** — Context-aware empty states per module ("No table selected", "Connect first", etc.)
-- **Resizable Panels** — Split-pane layout with draggable dividers
-- **Toast Notifications** — Themed toasts (success/error/warning) matching the instrument aesthetic
+<p align="center">
+  <a href="#quick-start">Quick Start</a> · <a href="#features">Features</a> · <a href="#screenshots">Screenshots</a> · <a href="#how-it-works">How It Works</a> · <a href="#deploy">Deploy</a> · <a href="#contributing">Contributing</a>
+</p>
 
 ---
 
-## Supported API Keys
+> [!WARNING]
+> **For authorized security testing only.** Do not use against projects you don't own or have explicit permission to test.
 
-| Key Type                  | Prefix                             | Access Level                                   |
-| ------------------------- | ---------------------------------- | ---------------------------------------------- |
-| Publishable               | `sb_publishable_`                  | Low privilege, schema blocked — use bruteforce |
-| Secret                    | `sb_secret_`                       | Elevated, bypasses RLS                         |
-| Anon (legacy JWT)         | `eyJ...` with `role: anon`         | Low privilege, schema accessible               |
-| Service Role (legacy JWT) | `eyJ...` with `role: service_role` | Elevated, bypasses RLS                         |
+## Why supasec?
 
-Key type is auto-detected from the prefix/JWT payload and displayed in the connection header.
+Supabase makes it easy to build apps fast — but that speed creates a massive surface for misconfiguration. Row-Level Security (RLS) policies are easy to get wrong, storage buckets default to restrictive but are often opened up "just for testing," and leaked API keys in JS bundles give attackers a direct line to your database.
+
+**supasec** is a purpose-built toolkit that probes every attack surface of a Supabase project — the REST API, GraphQL, Storage, Auth, Edge Functions, and Realtime — and turns what it finds into actionable, ranked findings with evidence and remediation steps.
+
+Inspired by [firepwn-tool](https://github.com/0xbigshaq/firepwn-tool) (Firebase), built from scratch for Supabase.
 
 ---
 
-## Getting Started
+## Quick Start
 
-### One-command install (Docker)
-
-You only need Docker installed:
+### Docker (recommended)
 
 ```bash
-git clone https://github.com/berodcdev/supabase-pwn.git
-cd supabase-pwn
+git clone https://github.com/berodcdev/supasec.git
+cd supasec
 ./install.sh
 ```
 
-The installer checks Docker, builds the app, and serves it at **http://localhost:3000** — bound to loopback only, so it's reachable from your machine and needs no login.
+Open **http://localhost:3000** — done.
 
-**Options:**
-
-| Flag                  | Description                        |
-| --------------------- | ---------------------------------- |
-| `--port 8080`         | Use a custom port                  |
-| `--yes`               | Skip confirmation prompts          |
-| `--update`            | Rebuild and restart                |
-| `--uninstall`         | Stop, remove container and image   |
-
-### Without cloning (prebuilt image)
-
-Once the GitHub Action builds the image, install on any machine with Docker in one line:
+### From source
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/berodcdev/supabase-pwn/master/install.sh | bash
-```
-
-This pulls `ghcr.io/berodcdev/supabase-pwn:latest` and runs it. Requires the repo and GHCR package to be public. From a private setup, use the clone + `./install.sh` route.
-
-### Run from source (development)
-
-```bash
+git clone https://github.com/berodcdev/supasec.git
+cd supasec
 npm install
 npm run dev
 ```
 
-Available scripts:
+### Install flags
 
-| Script            | Description                           |
-| ----------------- | ------------------------------------- |
-| `npm run dev`     | Start dev server (localhost only)     |
-| `npm run dev:lan` | Start dev server (LAN accessible)     |
-| `npm run build`   | Production build                      |
-| `npm run start`   | Start production server               |
-| `npm run test`    | Run tests (vitest)                    |
-| `npm run typecheck` | Type-check with tsc                |
-| `npm run lint`    | Lint with ESLint                      |
-
-### Deploy for a team (Caddy + Authelia + TOTP)
-
-To expose it on a server behind a login screen with one-time-password (authenticator app), see [deploy/README.md](deploy/README.md). The stack uses Caddy for automatic HTTPS and Authelia for SSO + TOTP — only ports 80/443 are exposed.
-
----
-
-## Usage
-
-### 1. Connect
-
-Enter a Supabase project URL + API key (or paste a web app URL and let **Extract Config** find them automatically). The app fetches the OpenAPI spec to discover tables, columns, and RPC functions. If the spec is blocked, use the **Bruteforce** button.
-
-### 2. Recon Dashboard
-
-After connecting, the Recon dashboard shows an overview: how many tables were found, which are exposed, key type risk level, latest findings, and recent clues. Use the stat cards to jump directly into any module.
-
-### 3. Database
-
-Select a table, build queries with filters, auto-fill insert data with fake values, send SELECT results to the Update tab with one click. Use **Embed** to test relationship traversal and **Escalate** to test mass-assignment. Sensitive columns are highlighted with PII badges, and leaked secrets in values are flagged automatically.
-
-### 4. Storage
-
-List buckets, browse file trees, test upload/download/delete permissions. Sensitive bucket names and filenames (.env, backups, dumps) are flagged. Every operation has copy-as-curl.
-
-### 5. Auth
-
-Try signing up, signing in, creating anonymous sessions, testing OAuth providers, or injecting intercepted JWTs into the Bearer Token tab.
-
-### 6. Edge Functions
-
-Invoke by name with custom request bodies and headers, or use **Discover** to bruteforce common function names. Responses are scanned for leaked secrets.
-
-### 7. Realtime
-
-Subscribe to channels and watch for postgres_changes, broadcasts, or presence events. Payloads are scanned for secrets.
-
-### 8. AutoPwn (Automated Scan)
-
-Configure which phases to run (Database RLS, Storage, Auth, Edge Functions), set concurrency, optionally add custom table names, and hit **Start Scan**. Results appear as a color-coded permission matrix. The findings engine ranks vulnerabilities by severity with evidence and remediation. Export a full Markdown report or compare with previous scans to track what changed.
+| Flag            | Description                      |
+| --------------- | -------------------------------- |
+| `--port 8080`   | Custom port                      |
+| `--yes`         | Skip confirmation prompts        |
+| `--update`      | Rebuild and restart              |
+| `--uninstall`   | Stop and remove everything       |
 
 ---
 
 ## Screenshots
 
-<!-- Replace these with updated screenshots of the current UI -->
+<table>
+  <tr>
+    <td align="center"><strong>Target Acquisition</strong></td>
+    <td align="center"><strong>AutoPwn Configuration</strong></td>
+  </tr>
+  <tr>
+    <td><img src="docs/screenshots/connect.png" alt="Connect to a Supabase project" width="450" /></td>
+    <td><img src="docs/screenshots/autopwn-config.png" alt="Configure automated security scan" width="450" /></td>
+  </tr>
+  <tr>
+    <td colspan="2" align="center"><strong>Ranked Security Findings</strong></td>
+  </tr>
+  <tr>
+    <td colspan="2" align="center"><img src="docs/screenshots/findings.png" alt="Security findings ranked by severity" width="800" /></td>
+  </tr>
+</table>
 
-**Recon Dashboard**
-![Recon Dashboard](image-1.png)
+---
 
-**Storage Explorer**
-![Storage Explorer](image.png)
+## Features
 
-<!-- TODO: Add more screenshots
-- AutoPwn scan results with findings
-- Database Explorer with PII badges
-- RLS Policy Analyzer
-- Scan diff (before/after)
-- Telemetry bar with clues
--->
+### Automated Scanning
+
+- **AutoPwn** — One-click scan across 6 attack surfaces (Database, Storage, Auth, Edge Functions, Realtime, GraphQL) with configurable concurrency and scan presets (Quick / Deep / Safe)
+- **Findings Engine** — Raw results become ranked vulnerabilities (CRITICAL → LOW) with evidence, remediation, and PII escalation
+- **Scan History & Diff** — Compare scans to track what's fixed and what's new
+- **Report Export** — Markdown or interactive HTML pentest reports with findings table, evidence, and remediation
+
+### Config Extraction
+
+- **Auto-Extract** — Paste any web app URL; supasec crawls JS bundles for Supabase URLs, API keys, `.from()` tables, `.rpc()` functions, and `.functions.invoke()` names
+- **Chunk Following** — Follows lazy-loaded imports to find configs buried in code-split bundles
+- **Self-Hosted Detection** — Identifies custom Supabase domains via `createClient()` calls and env patterns
+
+### Database
+
+- **Full CRUD Explorer** — SELECT / INSERT / UPDATE / DELETE with filter builder, fake-data auto-fill, and column picker
+- **Table & Column Bruteforce** — 130+ common names when the OpenAPI schema is blocked, plus custom wordlists
+- **RPC Invoker** — Discover functions from spec, auto-populate args, invoke
+- **Relationship Traversal** — Embed selector probes foreign-key joins via `?select=*,related(*)` 
+- **Mass-Assignment Test** — Inject role/admin fields to test privilege escalation
+- **RLS Policy Analyzer** — Static analysis detects `USING (true)`, missing `WITH CHECK`, absent `auth.uid()`
+
+### GraphQL
+
+- **GraphQL Explorer** — Introspection, schema browser, query editor — probes schema exposure through pg_graphql
+
+### Storage
+
+- **Bucket Explorer** — List, browse, upload, download, delete, public/signed URLs
+- **Deep Scan** — Recursive file enumeration with bulk download
+- **Sensitivity Detection** — Flags dangerous bucket names and filenames (`.env`, `backup.sql`, `dump.tar.gz`)
+
+### Auth
+
+- **Full Auth Probing** — Sign-up, sign-in, anonymous auth, OAuth provider enumeration, password reset
+- **Bearer Token Injection** — Test with intercepted JWTs
+
+### Edge Functions
+
+- **Invoke & Discover** — Call by name or bruteforce common function names
+- **Secret Scanning** — Responses scanned for leaked credentials
+
+### Realtime
+
+- **Channel Monitor** — Subscribe to postgres_changes, broadcast, and presence
+- **Payload Scanning** — Incoming events scanned for secrets and JWTs
+
+### Intelligence
+
+- **Sensitive Column Detection** — Flags `password`, `email`, `ssn`, `cpf`, `credit_card`, `api_key` with PII badges
+- **Secret Value Scanning** — Detects JWTs, AWS keys, Stripe keys, private keys in actual cell values
+- **JWT Decoder** — Auto-decodes JWTs showing role/exp; flags `service_role` leaks as CRITICAL
+- **Clue System** — All detections tagged as 🔎 CLUE with dedicated filter
+
+### AI Analysis (optional)
+
+- **AI Triage** — Send findings to an LLM (via OpenRouter) for automated verdicts, exploitability scores, and attack chain identification
+- **Run PoC** — Generate and execute proof-of-concept cURL commands with real API keys injected
+
+### Developer Experience
+
+- **Command Palette (⌘K)** — Navigate modules, run actions, export reports
+- **Copy-as-cURL** — Every operation has a curl copy button
+- **Request History** — Replay any previous request
+- **Output Log** — Color-coded, filterable, persistent (last 500 entries survive reloads)
+- **Instrument-Grade UI** — Dark theme with monospace typography, datum corners, reticle marks, and boot animations
+
+---
+
+## How It Works
+
+```
+1. CONNECT          Paste a project URL + API key (or let Extract find them from a web app URL)
+                    ↓
+2. DISCOVER         Schema auto-detected via OpenAPI; bruteforce fills gaps
+                    ↓
+3. SCAN             AutoPwn probes Database, Storage, Auth, Edge, Realtime, GraphQL
+                    ↓
+4. ANALYZE          Findings engine ranks vulnerabilities; AI triage (optional) adds verdicts
+                    ↓
+5. REPORT           Export Markdown/HTML report with evidence and remediation steps
+```
+
+---
+
+## Supported API Keys
+
+| Key Type          | Prefix / Pattern                   | Access Level                                  |
+| ----------------- | ---------------------------------- | --------------------------------------------- |
+| Publishable       | `sb_publishable_`                  | Low privilege — schema blocked, use bruteforce |
+| Secret            | `sb_secret_`                       | Elevated — bypasses RLS                       |
+| Anon (JWT)        | `eyJ...` with `role: anon`         | Low privilege — schema accessible             |
+| Service Role (JWT)| `eyJ...` with `role: service_role` | Elevated — bypasses RLS                       |
+
+Key type is auto-detected and shown in the connection header.
+
+---
+
+## Deploy
+
+For team/server deployments with authentication:
+
+| Stack                      | Reverse Proxy | Auth       |
+| -------------------------- | ------------- | ---------- |
+| `docker-compose.prod.yml`  | Caddy         | Authelia (TOTP) |
+| `docker-compose.srv1.yml`  | Traefik v3    | Authelia (TOTP) |
+
+Both include healthchecks and automatic HTTPS. See [deploy/README.md](deploy/README.md) for configuration.
 
 ---
 
 ## Tech Stack
 
-|                     |                                |
-| ------------------- | ------------------------------ |
-| Framework           | Next.js 16, React 19           |
-| Language            | TypeScript 5                   |
-| Styling             | Tailwind CSS v4                |
-| Components          | shadcn/ui (Radix primitives)   |
-| Supabase Client     | @supabase/supabase-js v2       |
-| Layout              | react-resizable-panels         |
-| Syntax Highlighting | prism-react-renderer           |
-| Testing             | Vitest                         |
-| Containerization    | Docker + Docker Compose        |
-| Production Auth     | Caddy + Authelia (TOTP)        |
+| Layer           | Technology                          |
+| --------------- | ----------------------------------- |
+| Framework       | Next.js 16, React 19               |
+| Language        | TypeScript 5 (strict)              |
+| Styling         | Tailwind CSS v4                    |
+| Components      | shadcn/ui (Radix primitives)       |
+| Supabase Client | @supabase/supabase-js v2           |
+| Command Palette | cmdk                               |
+| Testing         | Vitest                             |
+| Container       | Docker multi-stage + Compose       |
 
 ---
 
@@ -239,60 +220,49 @@ Configure which phases to run (Database RLS, Storage, Auth, Edge Functions), set
 
 ```
 app/
-  layout.tsx                 Root layout (providers, fonts, theme)
-  page.tsx                   Main split-pane UI with left rail + workspace
-  globals.css                Tailwind v4 theme variables
-  api/extract-config/        Config extraction API (crawls JS bundles)
+  api/extract-config/    Config extraction (crawls JS bundles)
+  api/ai-analyze/        OpenRouter streaming proxy
+  api/run-poc/           PoC execution proxy
+  api/health/            Docker healthcheck
 
-components/supabase-pwn/
-  init-form.tsx              Connection form + Extract Config
-  recon-dashboard.tsx        Overview dashboard with stats & findings
-  database-explorer.tsx      CRUD, filter builder, bruteforce, embed, escalate
-  storage-explorer.tsx       Bucket & file operations
-  edge-functions.tsx         Edge function invocation + discovery
-  realtime.tsx               Channel subscriptions & event stream
-  auth-panel.tsx             Auth testing (sign-in/up, anon, OAuth, bearer)
-  autopwn.tsx                Automated multi-phase scanner + findings
-  output-log.tsx             Activity log viewer with clue filter
-  header.tsx                 App header with key type badge + disconnect
-  left-rail.tsx              Icon sidebar navigation
-  telemetry-bar.tsx          Bottom telemetry strip + expandable console
-  shared/
-    copy-curl.tsx            Copy-as-cURL button
-    data-table.tsx           Expandable data table with sensitivity badges
-    empty-state.tsx          Context-aware empty states
-    json-viewer.tsx          JSON syntax highlighting
-    request-history.tsx      Request history panel with replay
-    result-skeleton.tsx      Scan-sweep skeleton loaders
-    reticle-mark.tsx         Focus reticle marks
-    reticle-panel.tsx        Reticle focus panel wrapper
-    section-header.tsx       Shared section header component
-    status-badge.tsx         Severity/status badges
+components/supasec/
+  init-form.tsx          Connection + Extract Config
+  recon-dashboard.tsx    Overview dashboard
+  database-explorer.tsx  CRUD, bruteforce, embed, escalate
+  graphql-explorer.tsx   GraphQL introspection + queries
+  storage-explorer.tsx   Bucket & file operations
+  edge-functions.tsx     Edge function invoke + discovery
+  realtime.tsx           Channel subscriptions
+  auth-panel.tsx         Auth testing
+  autopwn.tsx            Automated scanner + findings
+  ai-analysis.tsx        AI triage + PoC runner
+  command-palette.tsx    ⌘K command palette
+  shared/                Reusable components
 
 lib/
-  supabase-context.tsx       State management, schema parsing, bruteforce, logs
-  findings.ts                Findings engine (scan → ranked vulnerabilities)
-  sensitive.ts               PII column detection + secret value scanning + JWT decode
-  rls.ts                     RLS policy static analyzer
-  scan-history.ts            Scan persistence + diff engine
-  scan-report.ts             Markdown report generator
-  curl.ts                    cURL command builder
-  utils.ts                   Tailwind class merge utility
+  findings.ts            Scan → ranked vulnerabilities
+  sensitive.ts           PII + secret detection + JWT decode
+  rls.ts                 RLS policy analyzer
+  scan-history.ts        Persistence + diff engine
+  scan-report.ts         Report generator (MD + HTML)
 
-deploy/
-  Caddyfile                  Caddy reverse proxy config
-  authelia/                  Authelia config (login + TOTP)
-  README.md                  Production deployment guide
-
-docker-compose.yml           Local Docker setup
-docker-compose.prod.yml      Production (Caddy + Authelia)
-docker-compose.srv1.yml      Alternative server deploy (Traefik + Authelia)
-Dockerfile                   Multi-stage build
-install.sh                   One-command installer/updater/uninstaller
+deploy/                  Production stacks (Caddy/Traefik + Authelia)
 ```
+
+---
+
+## Contributing
+
+Contributions are welcome! See [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
+
+---
+
+## Security
+
+Found a vulnerability in supasec itself? See [SECURITY.md](SECURITY.md) for responsible disclosure.
 
 ---
 
 ## License
 
-MIT
+[MIT](LICENSE) — use it, fork it, break things (with permission).

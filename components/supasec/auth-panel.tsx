@@ -1,7 +1,7 @@
 "use client"
 
 import { useState } from "react"
-import { Copy, LogOut, ChevronDown, ChevronRight, User } from "lucide-react"
+import { Copy, LogOut, ChevronDown, ChevronRight, User, KeyRound } from "lucide-react"
 
 import { useSupabase } from "@/lib/supabase-context"
 import { Button } from "@/components/ui/button"
@@ -16,8 +16,9 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { JsonViewer } from "@/components/supabase-pwn/shared/json-viewer"
-import { StatusBadge } from "@/components/supabase-pwn/shared/status-badge"
+import { JsonViewer } from "@/components/supasec/shared/json-viewer"
+import { StatusBadge } from "@/components/supasec/shared/status-badge"
+import { SectionHeader } from "@/components/supasec/shared/section-header"
 import {
   Collapsible,
   CollapsibleContent,
@@ -680,10 +681,9 @@ export function AuthPanel() {
   return (
     <ScrollArea className="h-full">
       <div className="space-y-4 p-4">
+        <SectionHeader icon={KeyRound} eyebrow="AUTH" title="Authentication Probing" />
+
         <Card>
-          <CardHeader className="pb-3">
-            <CardTitle className="text-sm">Authentication</CardTitle>
-          </CardHeader>
           <CardContent>
             <Tabs defaultValue="signin">
               <TabsList className="w-full">

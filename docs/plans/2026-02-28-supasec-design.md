@@ -1,8 +1,8 @@
-# supabase-pwn Design Document
+# supasec Design Document
 
 ## Overview
 
-supabase-pwn is a Supabase security testing tool for pentesters, inspired by [firepwn-tool](https://github.com/0xbigshaq/firepwn-tool). It uses the official Supabase JavaScript client SDK (`@supabase/supabase-js`) to mimic real client behavior and test Supabase projects for misconfigurations — RLS bypasses, exposed data, auth weaknesses, storage leaks, and more.
+supasec is a Supabase security testing tool for pentesters, inspired by [firepwn-tool](https://github.com/0xbigshaq/firepwn-tool). It uses the official Supabase JavaScript client SDK (`@supabase/supabase-js`) to mimic real client behavior and test Supabase projects for misconfigurations — RLS bypasses, exposed data, auth weaknesses, storage leaks, and more.
 
 ## Tech Stack
 
@@ -30,7 +30,7 @@ Single React Context (`SupabaseProvider` / `useSupabase()`) managing:
 
 ```
 +-------------------------------------------------------+
-|  [Shield icon] supabase-pwn                [GitHub]    |
+|  [Shield icon] supasec                [GitHub]    |
 +-------------------------------------------------------+
 |  INIT FORM (collapsible after connection)              |
 |  Project URL + Anon Key                                |
@@ -158,7 +158,7 @@ app/
   page.tsx                — Main page with resizable panels
   globals.css             — Global styles + CSS variables
 components/
-  supabase-pwn/
+  supasec/
     header.tsx            — App header + branding
     init-form.tsx         — Connection configuration
     auth-panel.tsx        — Authentication module

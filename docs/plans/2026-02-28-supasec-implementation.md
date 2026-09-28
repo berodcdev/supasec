@@ -1,4 +1,4 @@
-# supabase-pwn Implementation Plan
+# supasec Implementation Plan
 
 > **For Claude:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task.
 
@@ -78,7 +78,7 @@ Replace `app/globals.css` with dark-first theme using shadcn CSS variables. Use 
 Replace `app/layout.tsx`:
 
 - Change fonts to Inter (sans) + JetBrains Mono (mono) via `next/font/google`
-- Update metadata: title "supabase-pwn", description "Supabase security testing tool"
+- Update metadata: title "supasec", description "Supabase security testing tool"
 - Wrap body content in `<ThemeProvider attribute="class" defaultTheme="dark" enableSystem disableTransitionOnChange>`
 - Add `suppressHydrationWarning` to `<html>`
 
@@ -167,7 +167,7 @@ git commit -m "feat: add Supabase context provider with schema discovery"
 
 **Files:**
 
-- Create: `components/supabase-pwn/header.tsx`
+- Create: `components/supasec/header.tsx`
 
 **Step 1: Create header.tsx**
 
@@ -179,10 +179,10 @@ export function Header() {
     <header className="flex items-center justify-between border-b border-border px-4 py-3">
       <div className="flex items-center gap-2">
         <Shield className="h-6 w-6 text-emerald-500" />
-        <h1 className="text-lg font-bold tracking-tight">supabase-pwn</h1>
+        <h1 className="text-lg font-bold tracking-tight">supasec</h1>
       </div>
       <a
-        href="https://github.com/berodcdev/supabase-pwn"
+        href="https://github.com/berodcdev/supasec"
         target="_blank"
         rel="noopener noreferrer"
         className="text-sm text-muted-foreground hover:text-foreground transition-colors"
@@ -197,7 +197,7 @@ export function Header() {
 **Step 2: Commit**
 
 ```bash
-git add components/supabase-pwn/header.tsx
+git add components/supasec/header.tsx
 git commit -m "feat: add header component"
 ```
 
@@ -207,7 +207,7 @@ git commit -m "feat: add header component"
 
 **Files:**
 
-- Create: `components/supabase-pwn/init-form.tsx`
+- Create: `components/supasec/init-form.tsx`
 
 **Step 1: Create init-form.tsx**
 
@@ -217,7 +217,7 @@ A client component (`"use client"`) with:
 - Two inputs: Project URL and Anon Key
 - "Initialize" button that calls `initialize()` from context
 - On success: auto-collapse, show green "Connected" badge in header
-- Persist URL and key to `localStorage` under `supabase-pwn-config`
+- Persist URL and key to `localStorage` under `supasec-config`
 - On mount: load from localStorage, auto-populate fields
 - "Disconnect" button when connected (resets state, expands form)
 - Input validation: URL must match `https://*.supabase.co` or any URL, key must be non-empty
@@ -225,7 +225,7 @@ A client component (`"use client"`) with:
 **Step 2: Commit**
 
 ```bash
-git add components/supabase-pwn/init-form.tsx
+git add components/supasec/init-form.tsx
 git commit -m "feat: add init form with localStorage persistence"
 ```
 
@@ -235,7 +235,7 @@ git commit -m "feat: add init form with localStorage persistence"
 
 **Files:**
 
-- Create: `components/supabase-pwn/output-log.tsx`
+- Create: `components/supasec/output-log.tsx`
 
 **Step 1: Create output-log.tsx**
 
@@ -252,7 +252,7 @@ A client component with:
 **Step 2: Commit**
 
 ```bash
-git add components/supabase-pwn/output-log.tsx
+git add components/supasec/output-log.tsx
 git commit -m "feat: add output log with JSON syntax highlighting"
 ```
 
@@ -262,7 +262,7 @@ git commit -m "feat: add output log with JSON syntax highlighting"
 
 **Files:**
 
-- Create: `components/supabase-pwn/auth-panel.tsx`
+- Create: `components/supasec/auth-panel.tsx`
 
 **Step 1: Create auth-panel.tsx**
 
@@ -302,7 +302,7 @@ A client component with sub-tabs (using shadcn `Tabs`):
 **Step 2: Commit**
 
 ```bash
-git add components/supabase-pwn/auth-panel.tsx
+git add components/supasec/auth-panel.tsx
 git commit -m "feat: add auth panel with sign up, sign in, anon, and OAuth"
 ```
 
@@ -312,7 +312,7 @@ git commit -m "feat: add auth panel with sign up, sign in, anon, and OAuth"
 
 **Files:**
 
-- Create: `components/supabase-pwn/database-explorer.tsx`
+- Create: `components/supasec/database-explorer.tsx`
 
 **Step 1: Create database-explorer.tsx**
 
@@ -365,7 +365,7 @@ A client component with:
 **Step 2: Commit**
 
 ```bash
-git add components/supabase-pwn/database-explorer.tsx
+git add components/supasec/database-explorer.tsx
 git commit -m "feat: add database explorer with CRUD and RPC"
 ```
 
@@ -375,7 +375,7 @@ git commit -m "feat: add database explorer with CRUD and RPC"
 
 **Files:**
 
-- Create: `components/supabase-pwn/storage-explorer.tsx`
+- Create: `components/supasec/storage-explorer.tsx`
 
 **Step 1: Create storage-explorer.tsx**
 
@@ -428,7 +428,7 @@ A client component with:
 **Step 2: Commit**
 
 ```bash
-git add components/supabase-pwn/storage-explorer.tsx
+git add components/supasec/storage-explorer.tsx
 git commit -m "feat: add storage explorer with bucket and file operations"
 ```
 
@@ -438,7 +438,7 @@ git commit -m "feat: add storage explorer with bucket and file operations"
 
 **Files:**
 
-- Create: `components/supabase-pwn/edge-functions.tsx`
+- Create: `components/supasec/edge-functions.tsx`
 
 **Step 1: Create edge-functions.tsx**
 
@@ -454,7 +454,7 @@ A client component with:
 **Step 2: Commit**
 
 ```bash
-git add components/supabase-pwn/edge-functions.tsx
+git add components/supasec/edge-functions.tsx
 git commit -m "feat: add edge functions invocation panel"
 ```
 
@@ -464,7 +464,7 @@ git commit -m "feat: add edge functions invocation panel"
 
 **Files:**
 
-- Create: `components/supabase-pwn/realtime.tsx`
+- Create: `components/supasec/realtime.tsx`
 
 **Step 1: Create realtime.tsx**
 
@@ -505,7 +505,7 @@ A client component with:
 **Step 2: Commit**
 
 ```bash
-git add components/supabase-pwn/realtime.tsx
+git add components/supasec/realtime.tsx
 git commit -m "feat: add realtime subscriptions panel"
 ```
 
@@ -515,7 +515,7 @@ git commit -m "feat: add realtime subscriptions panel"
 
 **Files:**
 
-- Create: `components/supabase-pwn/autopwn.tsx`
+- Create: `components/supasec/autopwn.tsx`
 
 **Step 1: Create autopwn.tsx**
 
@@ -588,7 +588,7 @@ Phase 5 — Edge Function Discovery:
 **Step 2: Commit**
 
 ```bash
-git add components/supabase-pwn/autopwn.tsx
+git add components/supasec/autopwn.tsx
 git commit -m "feat: add autopwn automated security scanner"
 ```
 
@@ -607,21 +607,21 @@ Wrap the `ThemeProvider` children with `<SupabaseProvider>` from `lib/supabase-c
 
 **Step 2: Replace page.tsx with the main layout**
 
-Replace the default Next.js page with the supabase-pwn layout:
+Replace the default Next.js page with the supasec layout:
 
 ```tsx
 "use client"
 
 import { ResizablePanelGroup, ResizablePanel, ResizableHandle } from "react-resizable-panels"
-import { Header } from "@/components/supabase-pwn/header"
-import { InitForm } from "@/components/supabase-pwn/init-form"
-import { AuthPanel } from "@/components/supabase-pwn/auth-panel"
-import { DatabaseExplorer } from "@/components/supabase-pwn/database-explorer"
-import { StorageExplorer } from "@/components/supabase-pwn/storage-explorer"
-import { EdgeFunctions } from "@/components/supabase-pwn/edge-functions"
-import { Realtime } from "@/components/supabase-pwn/realtime"
-import { Autopwn } from "@/components/supabase-pwn/autopwn"
-import { OutputLog } from "@/components/supabase-pwn/output-log"
+import { Header } from "@/components/supasec/header"
+import { InitForm } from "@/components/supasec/init-form"
+import { AuthPanel } from "@/components/supasec/auth-panel"
+import { DatabaseExplorer } from "@/components/supasec/database-explorer"
+import { StorageExplorer } from "@/components/supasec/storage-explorer"
+import { EdgeFunctions } from "@/components/supasec/edge-functions"
+import { Realtime } from "@/components/supasec/realtime"
+import { Autopwn } from "@/components/supasec/autopwn"
+import { OutputLog } from "@/components/supasec/output-log"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { useSupabase } from "@/lib/supabase-context"
 
@@ -733,5 +733,5 @@ git commit -m "feat: assemble main page with resizable panel layout"
 
 ```bash
 git add -A
-git commit -m "feat: supabase-pwn v0.1.0 - complete security testing tool"
+git commit -m "feat: supasec v0.1.0 - complete security testing tool"
 ```

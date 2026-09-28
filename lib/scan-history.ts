@@ -81,7 +81,7 @@ export type ScanDiff = {
   newFunctions: string[]
 }
 
-const STORAGE_PREFIX = "supabase-pwn-scan:"
+const STORAGE_PREFIX = "supasec-scan:"
 const HISTORY_LIMIT = 5
 
 function projectKey(projectUrl: string): string {

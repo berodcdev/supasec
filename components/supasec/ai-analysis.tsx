@@ -66,9 +66,9 @@ import {
 import {
   StatusBadge,
   type Severity,
-} from "@/components/supabase-pwn/shared/status-badge"
-import { ReticlePanel } from "@/components/supabase-pwn/shared/reticle-panel"
-import { EmptyState } from "@/components/supabase-pwn/shared/empty-state"
+} from "@/components/supasec/shared/status-badge"
+import { ReticlePanel } from "@/components/supasec/shared/reticle-panel"
+import { EmptyState } from "@/components/supasec/shared/empty-state"
 
 // -- Run PoC inline -------------------------------------------------------
 

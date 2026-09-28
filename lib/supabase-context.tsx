@@ -640,7 +640,7 @@ export function SupabaseProvider({ children }: { children: ReactNode }) {
   const [historyHydrated, setHistoryHydrated] = useState(false)
   useEffect(() => {
     try {
-      const raw = localStorage.getItem("supabase-pwn-history")
+      const raw = localStorage.getItem("supasec-history")
       if (raw) {
         const parsed = JSON.parse(raw) as Array<
           Omit<RequestRecord, "timestamp"> & { timestamp: string }
@@ -659,7 +659,7 @@ export function SupabaseProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     if (!historyHydrated) return
     try {
-      localStorage.setItem("supabase-pwn-history", JSON.stringify(requestHistory))
+      localStorage.setItem("supasec-history", JSON.stringify(requestHistory))
     } catch {
       // ignore
     }
@@ -669,7 +669,7 @@ export function SupabaseProvider({ children }: { children: ReactNode }) {
   const [logsHydrated, setLogsHydrated] = useState(false)
   useEffect(() => {
     try {
-      const raw = localStorage.getItem("supabase-pwn-logs")
+      const raw = localStorage.getItem("supasec-logs")
       if (raw) {
         const parsed = JSON.parse(raw) as Array<{
           id: string
@@ -699,7 +699,7 @@ export function SupabaseProvider({ children }: { children: ReactNode }) {
       const slim = state.logs
         .slice(-500)
         .map(({ id, timestamp, type, message }) => ({ id, timestamp, type, message }))
-      localStorage.setItem("supabase-pwn-logs", JSON.stringify(slim))
+      localStorage.setItem("supasec-logs", JSON.stringify(slim))
     } catch {
       // ignore
     }

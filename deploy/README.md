@@ -1,6 +1,6 @@
 # Production deploy — app behind Caddy (HTTPS) + Authelia (login + TOTP)
 
-This runs the **production** build of supabase-pwn (not `next dev`) with a real
+This runs the **production** build of supasec (not `next dev`) with a real
 login screen and a one-time-password (authenticator app) second factor. Only
 Caddy is exposed (80/443); the app and Authelia stay on the internal network.
 

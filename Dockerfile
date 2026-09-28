@@ -1,5 +1,5 @@
 # syntax=docker/dockerfile:1
-# Imagem de produção do supabase-pwn (Next.js standalone).
+# Imagem de produção do supasec (Next.js standalone).
 # Node 22 LTS: estável e reprodutível entre macOS e Linux.
 
 FROM node:22-alpine AS base

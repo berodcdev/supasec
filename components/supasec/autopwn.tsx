@@ -70,11 +70,12 @@ import { Separator } from "@/components/ui/separator"
 import {
   StatusBadge as SeverityBadge,
   type Severity,
-} from "@/components/supabase-pwn/shared/status-badge"
-import { EmptyState } from "@/components/supabase-pwn/shared/empty-state"
-import { ReticlePanel } from "@/components/supabase-pwn/shared/reticle-panel"
-import { DataTable } from "@/components/supabase-pwn/shared/data-table"
-import { JsonViewer } from "@/components/supabase-pwn/shared/json-viewer"
+} from "@/components/supasec/shared/status-badge"
+import { EmptyState } from "@/components/supasec/shared/empty-state"
+import { ReticlePanel } from "@/components/supasec/shared/reticle-panel"
+import { DataTable } from "@/components/supasec/shared/data-table"
+import { JsonViewer } from "@/components/supasec/shared/json-viewer"
+import { SectionHeader } from "@/components/supasec/shared/section-header"
 import {
   deriveFindings,
   summarizeFindings,
@@ -83,7 +84,7 @@ import {
 } from "@/lib/findings"
 import { isSensitiveColumn } from "@/lib/sensitive"
 import type { AIAnalysis } from "@/lib/ai-analysis"
-import { AIAnalysisPanel, AskAIFindingButton } from "@/components/supabase-pwn/ai-analysis"
+import { AIAnalysisPanel, AskAIFindingButton } from "@/components/supasec/ai-analysis"
 
 // ---------------------------------------------------------------------------
 // Types
@@ -105,7 +106,7 @@ type ScanResult = {
   colCount?: number
   /** Column names harvested from the exposed row. */
   columns?: string[]
-  /** First exposed row — what actually leaked. */
+  /** Exposed sample rows — what actually leaked (up to 5). */
   sample?: unknown
 }
 
@@ -531,11 +532,10 @@ export function AutoPwn() {
       const result: ScanResult = { name: table }
 
       try {
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const { data, error } = await (client as any)
+        const { data, error } = await client
           .from(table)
           .select("*")
-          .limit(1)
+          .limit(5)
 
         if (error) {
           const code = error.code ?? ""
@@ -566,21 +566,21 @@ export function AutoPwn() {
           const rowsReturned = Array.isArray(data) ? data.length : 0
           if (rowsReturned > 0) {
             result.select = "allowed"
-            const first = (data as unknown[])[0]
+            const rows = data as unknown[]
+            const first = rows[0]
             const columns =
               first && typeof first === "object"
                 ? Object.keys(first as Record<string, unknown>)
                 : []
             result.columns = columns
             result.colCount = columns.length
-            result.sample = first
+            result.sample = rows
 
             // Best-effort exact row count (cheap HEAD request) — only for the
             // few tables that actually expose data, so scan timing is unaffected.
             let exact: number | null = null
             try {
-              // eslint-disable-next-line @typescript-eslint/no-explicit-any
-              const { count } = await (client as any)
+              const { count } = await client
                 .from(table)
                 .select("*", { count: "exact", head: true })
               exact = typeof count === "number" ? count : null
@@ -607,11 +607,10 @@ export function AutoPwn() {
         // INSERT test
         try {
           setCurrentItem(`INSERT on ${table} (${idx + 1}/${total})`)
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          const { error: insertError } = await (client as any)
+          const { error: insertError } = await client
             .from(table)
             .insert({
-              __supabase_pwn_probe: true,
+              __supasec_probe: true,
               _timestamp: Date.now(),
             })
 
@@ -639,11 +638,10 @@ export function AutoPwn() {
         // DELETE test (cleanup)
         try {
           setCurrentItem(`DELETE on ${table} (${idx + 1}/${total})`)
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          const { error: deleteError } = await (client as any)
+          const { error: deleteError } = await client
             .from(table)
             .delete()
-            .eq("__supabase_pwn_probe", true)
+            .eq("__supasec_probe", true)
 
           if (deleteError) {
             const code = deleteError.code ?? ""
@@ -820,7 +818,7 @@ export function AutoPwn() {
     // Test signup
     setCurrentItem("Testing open signup...")
     try {
-      const probeEmail = `supabase-pwn-${uuid().slice(0, 8)}@iapapi.com`
+      const probeEmail = `supasec-${uuid().slice(0, 8)}@iapapi.com`
       const { data, error } = await client.auth.signUp({
         email: probeEmail,
         password: "SupabasePwnProbe123!",
@@ -1031,8 +1029,7 @@ export function AutoPwn() {
 
           const channel = client.channel(`pwn-rt-probe-${table}-${Date.now()}`)
           channel
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            .on("postgres_changes" as any, { event: "*", schema: "public", table } as any, () => {})
+            .on("postgres_changes", { event: "*", schema: "public", table }, () => {})
             .subscribe((status) => {
               clearTimeout(timeout)
               if (status === "SUBSCRIBED") {
@@ -1508,6 +1505,8 @@ export function AutoPwn() {
 
   return (
     <div className="space-y-4">
+      <SectionHeader icon={ShieldAlert} eyebrow="AUTOPWN" title="Automated Security Scanner" />
+
       {/* ------------------------------------------------------------------- */}
       {/* Key-kind banner                                                     */}
       {/* ------------------------------------------------------------------- */}
@@ -1825,9 +1824,11 @@ export function AutoPwn() {
               <Button
                 onClick={handleStartScan}
                 className="gap-2 rounded-sm bg-armed font-mono uppercase tracking-widest text-armed-foreground shadow-[0_0_20px_-6px_var(--color-armed)] hover:bg-armed/90"
+                title="Runs a multi-phase scan with 100+ requests across database, storage, auth, edge functions, realtime, and GraphQL"
               >
                 <Play className="size-4" />
                 Start Scan
+                <span className="text-[9px] font-normal normal-case tracking-normal text-armed-foreground/60">~100+ reqs</span>
               </Button>
             ) : (
               <Button
@@ -2371,13 +2372,15 @@ export function AutoPwn() {
                             )}
                             <div>
                               <p className="mb-1 font-mono text-[10px] uppercase tracking-widest text-muted-foreground">
-                                Exposed sample row
+                                Exposed sample ({Array.isArray(r.sample) ? r.sample.length : 1} row{Array.isArray(r.sample) && r.sample.length !== 1 ? "s" : ""})
                               </p>
                               <JsonViewer
                                 data={r.sample}
                                 className="max-h-72"
                                 padding="p-2"
                                 copyable
+                                wrapperCollapsible
+                                defaultCollapsed
                               />
                             </div>
                           </div>
@@ -2442,6 +2445,25 @@ export function AutoPwn() {
                       ]}
                       rows={storageResults}
                       getRowKey={(r) => r.name}
+                      renderExpanded={(r) =>
+                        r.public || r.listable === "allowed" ? (
+                          <div className="space-y-1">
+                            {r.public && (
+                              <p className="font-mono text-[10px] text-danger">
+                                Bucket is publicly accessible — any file URL is reachable without authentication.
+                              </p>
+                            )}
+                            {r.listable === "allowed" && (
+                              <p className="font-mono text-[10px] text-warning">
+                                Directory listing is enabled — file names and metadata are enumerable
+                                {r.fileCount !== undefined && r.fileCount > 0
+                                  ? ` (${r.fileCount} file${r.fileCount !== 1 ? "s" : ""} found in root).`
+                                  : "."}
+                              </p>
+                            )}
+                          </div>
+                        ) : null
+                      }
                     />
                   </ResultSection>
                 </>
@@ -2487,6 +2509,18 @@ export function AutoPwn() {
                       ]}
                       rows={authResults}
                       getRowKey={(r) => r.feature}
+                      renderExpanded={(r) =>
+                        r.details ? (
+                          <div className="space-y-1">
+                            <p className="font-mono text-[10px] uppercase tracking-widest text-muted-foreground">
+                              Full details
+                            </p>
+                            <p className="font-mono text-xs text-foreground/80 whitespace-pre-wrap break-all">
+                              {r.details}
+                            </p>
+                          </div>
+                        ) : null
+                      }
                     />
                   </ResultSection>
                 </>
@@ -2522,9 +2556,28 @@ export function AutoPwn() {
                           align: "center",
                           cell: (r) => <StatusBadge status={r.status} />,
                         },
+                        {
+                          key: "statusCode",
+                          header: "HTTP",
+                          align: "center",
+                          className: "font-mono text-xs text-muted-foreground",
+                          cell: (r) => r.statusCode ?? "-",
+                        },
                       ]}
                       rows={functionResults}
                       getRowKey={(r) => r.name}
+                      renderExpanded={(r) =>
+                        r.status === "found" ? (
+                          <div className="space-y-1">
+                            <p className="font-mono text-[10px] text-warning">
+                              Function is deployed
+                              {r.statusCode
+                                ? ` — responded with HTTP ${r.statusCode}${r.statusCode === 401 ? " (requires auth)" : r.statusCode === 500 ? " (server error)" : ""}.`
+                                : " — no CORS headers (existence inferred from network behavior)."}
+                            </p>
+                          </div>
+                        ) : null
+                      }
                     />
                   </ResultSection>
                 </>
@@ -2571,6 +2624,17 @@ export function AutoPwn() {
                       ]}
                       rows={realtimeResults}
                       getRowKey={(r) => r.table}
+                      renderExpanded={(r) =>
+                        r.subscribed ? (
+                          <p className="font-mono text-[10px] text-danger">
+                            Realtime postgres_changes subscription is open — row-level changes on this table are observable without RLS restriction.
+                          </p>
+                        ) : r.error ? (
+                          <p className="font-mono text-[10px] text-muted-foreground whitespace-pre-wrap break-all">
+                            {r.error}
+                          </p>
+                        ) : null
+                      }
                     />
                   </ResultSection>
                 </>

@@ -12,7 +12,7 @@ import { Textarea } from "@/components/ui/textarea"
 import { Label } from "@/components/ui/label"
 import { Badge } from "@/components/ui/badge"
 import { Switch } from "@/components/ui/switch"
-import { StatusBadge, type Severity } from "@/components/supabase-pwn/shared/status-badge"
+import { StatusBadge, type Severity } from "@/components/supasec/shared/status-badge"
 import {
   Collapsible,
   CollapsibleContent,
@@ -35,7 +35,7 @@ type ExtractCandidate = {
   source: string | null
 }
 
-const STORAGE_KEY = "supabase-pwn-config"
+const STORAGE_KEY = "supasec-config"
 
 type PersistedConfig = {
   projectUrl: string
@@ -114,16 +114,22 @@ export function InitForm() {
       setKey(config.apiKey)
     }
     try {
-      setAutoScan(localStorage.getItem("supabase-pwn-autoscan") === "1")
+      setAutoScan(localStorage.getItem("supasec-autoscan") === "1")
     } catch {
       // localStorage may be unavailable — ignore
     }
   }, [])
 
   function toggleAutoScan(v: boolean) {
+    if (v) {
+      toast.warning(
+        "Auto-scan runs the full AutoPwn scanner immediately after connecting (~100+ requests). This can be noisy on the target.",
+        { duration: 5000 },
+      )
+    }
     setAutoScan(v)
     try {
-      localStorage.setItem("supabase-pwn-autoscan", v ? "1" : "0")
+      localStorage.setItem("supasec-autoscan", v ? "1" : "0")
     } catch {
       // ignore
     }
@@ -205,20 +211,22 @@ export function InitForm() {
       }
 
       const list: ExtractCandidate[] = data.candidates ?? []
+      const scripts: number = data.scannedScripts ?? 0
+      const entries: number = data.scannedEntries ?? 0
+      const coverage = `scanned ${scripts} script(s) across ${entries} page(s)`
 
       if (list.length === 0) {
-        const scripts: number = data.scannedScripts ?? 0
-        const entries: number = data.scannedEntries ?? 0
         toast.error(
           scripts === 0
             ? `No scripts could be fetched (${entries} page(s)). The site may block server-side fetches or render only via JS — try the exact page where the app talks to Supabase, or enable crawl.`
-            : `No Supabase config found — scanned ${scripts} script(s) across ${entries} page(s). Point at the page where login/data loads, or enable "Crawl 1 level".`,
+            : `No Supabase config found — ${coverage}. Point at the page where login/data loads, or enable "Crawl 1 level".`,
           { duration: 8000 },
         )
         return
       }
 
       if (list.length > 1) {
+        toast.info(`Found ${list.length} Supabase projects (${coverage})`)
         setCandidates(list)
         setPickerOpen(true)
         return
@@ -227,10 +235,10 @@ export function InitForm() {
       const only = list[0]
       const kindLabel = only.keyKind ? ` (${only.keyKind})` : ""
       if (only.apiKey) {
-        toast.success(`Found Supabase config${kindLabel} — connecting…`)
+        toast.success(`Found Supabase config${kindLabel} — ${coverage}. Connecting…`)
         await connectWithCandidate(only)
       } else {
-        toast.warning("Found Supabase URL but no usable key")
+        toast.warning(`Found Supabase URL but no usable key (${coverage})`)
         setUrl(only.projectUrl)
       }
     } catch (err) {
@@ -434,15 +442,26 @@ export function InitForm() {
             {!initialized && (
               <>
                 <Button
-                  className="w-full rounded-none bg-armed font-mono uppercase tracking-[0.2em] text-armed-foreground shadow-[0_0_20px_-6px_var(--color-armed)] hover:bg-armed/90"
+                  className={`w-full rounded-none font-mono uppercase tracking-[0.2em] ${
+                    autoScan
+                      ? "bg-warning text-warning-foreground shadow-[0_0_20px_-6px_var(--color-warning)] hover:bg-warning/90"
+                      : "bg-armed text-armed-foreground shadow-[0_0_20px_-6px_var(--color-armed)] hover:bg-armed/90"
+                  }`}
                   onClick={handleInitialize}
                   disabled={!canSubmit || loading}
+                  title={
+                    autoScan
+                      ? "Connects and immediately runs AutoPwn (~100+ requests)"
+                      : "Connects and fetches the OpenAPI schema (1 request)"
+                  }
                 >
                   {loading ? (
                     <>
                       <Loader2 className="h-4 w-4 animate-spin" />
                       Connecting…
                     </>
+                  ) : autoScan ? (
+                    "▸ Initialize & Scan"
                   ) : (
                     "▸ Initialize"
                   )}

@@ -17,7 +17,8 @@ import type { RealtimeChannel } from "@supabase/supabase-js"
 
 import { useSupabase } from "@/lib/supabase-context"
 import { scanJsonForSecrets } from "@/lib/sensitive"
-import { ReticlePanel } from "@/components/supabase-pwn/shared/reticle-panel"
+import { ReticlePanel } from "@/components/supasec/shared/reticle-panel"
+import { SectionHeader } from "@/components/supasec/shared/section-header"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -33,11 +34,11 @@ import {
 } from "@/components/ui/select"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { Separator } from "@/components/ui/separator"
-import { JsonViewer } from "@/components/supabase-pwn/shared/json-viewer"
+import { JsonViewer } from "@/components/supasec/shared/json-viewer"
 import {
   StatusBadge,
   type Severity,
-} from "@/components/supabase-pwn/shared/status-badge"
+} from "@/components/supasec/shared/status-badge"
 
 // ---------------------------------------------------------------------------
 // Types
@@ -664,6 +665,7 @@ function LiveEventStream({
                     className="max-h-48"
                     padding="p-2"
                     copyable
+                    wrapperCollapsible
                   />
                 </div>
               ))}
@@ -800,14 +802,7 @@ export function Realtime() {
 
   return (
     <div className="flex h-full flex-col gap-4 p-4">
-      {/* Header info */}
-      <div className="flex items-center gap-2 text-sm text-muted-foreground">
-        <Radio className="size-4" />
-        <span>
-          Test realtime subscriptions to detect data leaks via Postgres changes,
-          broadcast, and presence channels.
-        </span>
-      </div>
+      <SectionHeader icon={Radio} eyebrow="REALTIME" title="Monitor Channels & Events" />
 
       <ReticlePanel
         active={!!activeChannelName}

@@ -22,15 +22,15 @@ import {
 import { cn } from "@/lib/utils"
 import { useSupabase } from "@/lib/supabase-context"
 import { downloadFile } from "@/lib/scan-report"
-import { RequestHistoryButton } from "@/components/supabase-pwn/shared/request-history"
+import { RequestHistoryButton } from "@/components/supasec/shared/request-history"
 import type { LogEntry } from "@/lib/supabase-context"
 import { Button } from "@/components/ui/button"
 import { ScrollArea } from "@/components/ui/scroll-area"
-import { JsonViewer } from "@/components/supabase-pwn/shared/json-viewer"
+import { JsonViewer } from "@/components/supasec/shared/json-viewer"
 import {
   StatusBadge,
   type Severity,
-} from "@/components/supabase-pwn/shared/status-badge"
+} from "@/components/supasec/shared/status-badge"
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -205,7 +205,7 @@ export function OutputLog() {
     const line = (l: LogEntry) =>
       `- \`${formatTimestamp(l.timestamp)}\` ${l.message}`
     const out: string[] = [
-      "# supabase-pwn — session report",
+      "# supasec — session report",
       "",
       `_generated ${new Date().toISOString()}_`,
       "",
@@ -224,7 +224,7 @@ export function OutputLog() {
       ...logs.map((l) => `- \`${formatTimestamp(l.timestamp)}\` [${l.type.toUpperCase()}] ${l.message}`),
     )
     downloadFile(
-      `supabase-pwn-session-${new Date().toISOString().slice(0, 10)}.md`,
+      `supasec-session-${new Date().toISOString().slice(0, 10)}.md`,
       out.join("\n"),
       "text/markdown",
     )

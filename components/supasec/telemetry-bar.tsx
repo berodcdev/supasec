@@ -6,7 +6,7 @@ import { ChevronDown, ChevronUp } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { useSupabase } from "@/lib/supabase-context"
 import type { LogEntry } from "@/lib/supabase-context"
-import { OutputLog } from "@/components/supabase-pwn/output-log"
+import { OutputLog } from "@/components/supasec/output-log"
 
 const COUNTER: { type: LogEntry["type"]; label: string; cls: string }[] = [
   { type: "info", label: "INFO", cls: "text-info" },

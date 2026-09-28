@@ -9,14 +9,20 @@
 # deploy/authelia/users_database.yml — see deploy/README.md.
 
 services:
-  supabase-pwn:
+  supasec:
     build: .
-    image: supabase-pwn:latest
-    container_name: supabase-pwn
+    image: supasec:latest
+    container_name: supasec
     restart: unless-stopped
     environment:
       NODE_ENV: production
       NEXT_TELEMETRY_DISABLED: "1"
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:3000/api/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
     networks:
       - traefik_proxy
     labels:

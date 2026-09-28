@@ -14,11 +14,11 @@ import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { Badge } from "@/components/ui/badge"
 import { Card, CardContent } from "@/components/ui/card"
-import { JsonViewer } from "@/components/supabase-pwn/shared/json-viewer"
-import { SectionHeader } from "@/components/supabase-pwn/shared/section-header"
-import { EmptyState } from "@/components/supabase-pwn/shared/empty-state"
-import { CopyCurl } from "@/components/supabase-pwn/shared/copy-curl"
-import { ResultSkeleton } from "@/components/supabase-pwn/shared/result-skeleton"
+import { JsonViewer } from "@/components/supasec/shared/json-viewer"
+import { SectionHeader } from "@/components/supasec/shared/section-header"
+import { EmptyState } from "@/components/supasec/shared/empty-state"
+import { CopyCurl } from "@/components/supasec/shared/copy-curl"
+import { ResultSkeleton } from "@/components/supasec/shared/result-skeleton"
 
 // ---------------------------------------------------------------------------
 // Types
@@ -170,6 +170,7 @@ export function EdgeFunctions() {
 
   const handleDiscover = useCallback(async () => {
     if (!projectUrl || !apiKey) return
+    if (!window.confirm("This will send multiple requests to probe common function names. Continue?")) return
     setDiscovering(true)
     setFound([])
     try {
